@@ -1,8 +1,12 @@
 'use client';
 
 import { Crown } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useGameStore } from '@/lib/store/gameStore';
 
 export function Header() {
+  const newGame = useGameStore((state) => state.newGame);
+
   return (
     <header className="border-b border-border bg-card">
       <div className="container mx-auto px-4 py-4">
@@ -20,9 +24,11 @@ export function Header() {
             </div>
           </div>
 
-          {/* Actions - placeholder for future features */}
+          {/* Actions */}
           <div className="flex items-center gap-2">
-            {/* Dark mode toggle, settings, etc. can go here */}
+            <Button onClick={newGame} variant="outline">
+              New Game
+            </Button>
           </div>
         </div>
       </div>
