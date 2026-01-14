@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { useGameStore } from '@/lib/store/gameStore';
 import { Sparkles, GitMerge } from 'lucide-react';
 import { useState } from 'react';
+import { QUANTUM_MODE_EVENT } from '@/components/board/Chessboard';
 
 export function QuantumControls() {
   const selectedSquare = useGameStore((state) => state.selectedSquare);
@@ -19,16 +20,31 @@ export function QuantumControls() {
   const handleSplitMode = () => {
     setSplitMode(true);
     setMergeMode(false);
+    
+    // Dispatch event to Chessboard
+    window.dispatchEvent(
+      new CustomEvent(QUANTUM_MODE_EVENT, { detail: { mode: 'split' } })
+    );
   };
 
   const handleMergeMode = () => {
     setMergeMode(true);
     setSplitMode(false);
+    
+    // Dispatch event to Chessboard
+    window.dispatchEvent(
+      new CustomEvent(QUANTUM_MODE_EVENT, { detail: { mode: 'merge' } })
+    );
   };
 
   const cancelQuantumMode = () => {
     setSplitMode(false);
     setMergeMode(false);
+    
+    // Dispatch event to Chessboard
+    window.dispatchEvent(
+      new CustomEvent(QUANTUM_MODE_EVENT, { detail: { mode: 'cancel' } })
+    );
   };
 
   if (!selectedSquare) return null;
