@@ -178,9 +178,28 @@ export function Chessboard() {
 
   /** Check if square is a legal move destination */
   const isLegalMoveSquare = (square: SquareIndex): boolean => {
-    // In split mode, show available targets
+    // In split mode, show available split targets based on legal moves
     if (splitMode && splitSource !== null) {
-      return square !== splitSource && !splitTargets.includes(square);
+      const piece = getPieceAt(board, splitSource);
+      if (!piece) return false;
+      
+      // Generate legal split moves for this piece
+      const splitMoves = legalMoves.filter(m => m.type === 'split' && (m as { from: number }).from === splitSource);
+      
+      // If we don't have split moves calculated, show all valid move targets
+      if (splitMoves.length === 0) {
+        // Show legal normal move targets as potential split destinations
+        const normalMoves = legalMoves.filter(m => 
+          (m.type === 'normal' || m.type === 'capture') && (m as { from: number }).from === splitSource
+        );
+        return normalMoves.some(m => (m as { to: number }).to === square) && !splitTargets.includes(square);
+      }
+      
+      // Check if this square is a valid split target
+      return splitMoves.some(m => {
+        const split = m as { to1: number; to2: number };
+        return split.to1 === square || split.to2 === square;
+      }) && !splitTargets.includes(square);
     }
     
     // In merge mode, highlight mergeable pieces or target
@@ -220,8 +239,25 @@ export function Chessboard() {
     for (let rank = 7; rank >= 0; rank--) {
       for (let file = 0; file < 8; file++) {
         const index = rank * 8 + file;
-        const isLight = (rank + file) % 2 === 0;
-        const piece = getPieceAt(board, index);
+        const isLight = (rank + file) % 2 === 1;
+        
+        // Get piece at this square - for superposed pieces, getPieceAt might return null
+        // So we also check all pieces for any probability at this square
+        let piece = getPieceAt(board, index);
+        let probability = 1.0;
+        
+        // If no certain piece, check for superposed pieces
+        if (!piece) {
+          for (const p of board.pieces) {
+            const prob = p.superposition[index];
+            if (prob && prob > 0) {
+              piece = p;
+              probability = prob;
+              break; // Take first superposed piece at this location
+            }
+          }
+        }
+        
         const isSelected = isSquareHighlighted(index);
         const isLegalMove = isLegalMoveSquare(index);
 
@@ -241,7 +277,7 @@ export function Chessboard() {
               <Piece
                 type={piece.type}
                 color={piece.color}
-                probability={piece.superposition[index] || 1.0}
+                probability={probability}
                 quantumPiece={quantumPiece || undefined}
               />
             )}

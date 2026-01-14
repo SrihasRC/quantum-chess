@@ -435,12 +435,23 @@ function validateNormalMove(
     };
   }
   
-  // Check if move would violate double occupancy
-  if (wouldViolateDoubleOccupancy(board, move.pieceId, move.to)) {
-    return {
-      isLegal: false,
-      reason: 'Would violate No Double Occupancy rule',
-    };
+  // For captures, check if there's an enemy piece at target
+  if (move.type === 'capture') {
+    const targetPiece = getPieceAt(board, move.to);
+    if (!targetPiece || targetPiece.color === piece.color) {
+      return {
+        isLegal: false,
+        reason: 'Cannot capture: no enemy piece at target',
+      };
+    }
+  } else {
+    // For non-capture moves, check if move would violate double occupancy
+    if (wouldViolateDoubleOccupancy(board, move.pieceId, move.to)) {
+      return {
+        isLegal: false,
+        reason: 'Would violate No Double Occupancy rule',
+      };
+    }
   }
   
   return { isLegal: true };
