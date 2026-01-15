@@ -6,6 +6,7 @@ import { Square } from './Square';
 import { Piece } from './Piece';
 import { useGameStore } from '@/lib/store/gameStore';
 import { getPieceAt } from '@/lib/engine/state';
+import { validateMove } from '@/lib/engine/moves';
 import { indexToAlgebraic } from '@/lib/engine/utils';
 import type { SquareIndex } from '@/lib/types';
 import type { MoveMode } from '@/components/game/MoveModSelector';
@@ -77,18 +78,30 @@ export function Chessboard({ mode }: ChessboardProps) {
         if (newTargets.length === 2) {
           const piece = getPieceAt(board, splitSource);
           if (piece) {
-            movePiece({
-              type: 'split',
+            const splitMove = {
+              type: 'split' as const,
               pieceId: piece.id,
               from: splitSource,
               to1: newTargets[0],
               to2: newTargets[1],
-            });
+            };
             
-            // Show toast notification
-            toast.success('Split Move', {
-              description: `Piece split into superposition: ${indexToAlgebraic(newTargets[0])} and ${indexToAlgebraic(newTargets[1])}`,
-            });
+            // Validate the move before executing
+            const validation = validateMove(board, splitMove);
+            
+            if (validation.isLegal) {
+              movePiece(splitMove);
+              
+              // Show success toast
+              toast.success('Split Move', {
+                description: `Piece split into superposition: ${indexToAlgebraic(newTargets[0])} and ${indexToAlgebraic(newTargets[1])}`,
+              });
+            } else {
+              // Show error toast
+              toast.error('Invalid Split Move', {
+                description: validation.reason || 'Cannot split to those squares',
+              });
+            }
           }
           // Reset split state (mode persists unless user changes it)
           setSplitSource(null);

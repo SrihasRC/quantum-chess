@@ -31,6 +31,7 @@ import {
 } from './rules';
 import {
   getSquaresBetween,
+  indexToAlgebraic,
 } from './utils';
 import {
   wouldViolateDoubleOccupancy,
@@ -539,6 +540,23 @@ function validateSplitMove(
       isLegal: true,
       requiresMeasurement: true,
       measurementSquare: move.from,
+    };
+  }
+  
+  // Check that both targets are legal moves for this piece type
+  const validTargets = getPieceTargetSquares(piece.type, move.from, piece.color);
+  
+  if (!validTargets.includes(move.to1)) {
+    return {
+      isLegal: false,
+      reason: `Target 1 (${indexToAlgebraic(move.to1)}) is not a legal move for ${piece.type}`,
+    };
+  }
+  
+  if (!validTargets.includes(move.to2)) {
+    return {
+      isLegal: false,
+      reason: `Target 2 (${indexToAlgebraic(move.to2)}) is not a legal move for ${piece.type}`,
     };
   }
   
