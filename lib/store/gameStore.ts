@@ -203,14 +203,34 @@ export const useGameStore = create<GameStore>((set, get) => ({
             if (!measurement.result) {
               console.log('Measurement failed - target not at capture square');
               toast.info('Capture Failed', {
-                description: `Target piece was not found at ${indexToAlgebraic(move.to)}. Turn lost.`,
+                description: `Target piece was not found at ${indexToAlgebraic(move.to)}. Moving to empty square.`,
               });
-              // Switch turn since measurement counts as the move
-              const finalBoard = switchTurn(newBoard);
+              
+              // Target not there, but square is now empty - execute as normal move
+              const moveAsNormal: NormalMove = {
+                type: 'normal',
+                pieceId: move.pieceId,
+                from: move.from,
+                to: move.to,
+              };
+              
+              const finalBoard = executeNormalMove(newBoard, moveAsNormal);
+              const notation = formatMoveSimple(move.from, move.to, getPieceById(finalBoard, move.pieceId)!.type);
+              
+              // Switch turn and update state
+              const nextBoard = switchTurn(finalBoard);
               set({ 
-                board: finalBoard,
+                board: nextBoard,
                 selectedSquare: null,
                 legalMoves: [],
+                moveHistory: [
+                  ...state.moveHistory,
+                  {
+                    move: moveAsNormal,
+                    notation,
+                    timestamp: Date.now(),
+                  },
+                ],
               });
               return;
             }
