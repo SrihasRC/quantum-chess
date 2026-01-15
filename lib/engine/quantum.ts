@@ -23,7 +23,7 @@ import {
 
 // Split Move - Create Superposition
 
-/** Split piece into superposition (piece must be certain at source) */
+/** Split piece into superposition (can work on already superposed pieces) */
 export function splitMove(
   piece: QuantumPiece,
   fromSquare: SquareIndex,
@@ -31,9 +31,11 @@ export function splitMove(
   toSquare2: SquareIndex,
   probability1: number = 0.5
 ): SuperpositionState {
-  // Validate preconditions
-  if (piece.superposition[fromSquare] !== 1.0) {
-    throw new Error('Cannot split piece that is not certain at source square');
+  // Get probability at source square
+  const sourceProb = piece.superposition[fromSquare] || 0;
+  
+  if (sourceProb === 0) {
+    throw new Error('Cannot split piece from square where it has no probability');
   }
   
   if (probability1 <= 0 || probability1 >= 1) {
@@ -44,13 +46,21 @@ export function splitMove(
     throw new Error('Cannot split to the same square twice');
   }
   
-  // Create new superposition
-  const newSuperposition: SuperpositionState = {
-    [toSquare1]: probability1,
-    [toSquare2]: 1 - probability1,
-  };
+  // Create new superposition - remove from source and split to two targets
+  const newSuperposition: SuperpositionState = { ...piece.superposition };
   
-  return newSuperposition;
+  // Remove probability from source square
+  delete newSuperposition[fromSquare];
+  
+  // Add split probabilities to target squares
+  // Each target gets a fraction of the original source probability
+  const prob1 = sourceProb * probability1;
+  const prob2 = sourceProb * (1 - probability1);
+  
+  newSuperposition[toSquare1] = (newSuperposition[toSquare1] || 0) + prob1;
+  newSuperposition[toSquare2] = (newSuperposition[toSquare2] || 0) + prob2;
+  
+  return normalizeProbabilities(newSuperposition);
 }
 
 // Merge Move - Combine Superposition

@@ -18,6 +18,7 @@ import {
   getPieceById,
   isSquareCertainlyEmpty,
   getPiecesByColor,
+  getPiecesAtSquare,
 } from './state';
 import {
   getPieceTargetSquares,
@@ -51,25 +52,26 @@ export function generateLegalMoves(
   
   const moves: Move[] = [];
   
-  // For classical moves, piece must be certain at source
-  if (piece.superposition[fromSquare] === 1.0) {
-    // Normal moves and captures
+  // For classical moves, piece must be certain at source (will be measured if not)
+  if (piece.superposition[fromSquare] > 0) {
+    // Normal moves and captures (can be attempted even with superposed pieces)
     moves.push(...generateNormalMoves(board, piece, fromSquare));
     
-    // Castling (if king)
-    if (piece.type === 'K') {
+    // Castling (if king and certain at source)
+    if (piece.type === 'K' && piece.superposition[fromSquare] === 1.0) {
       moves.push(...generateCastlingMoves(board, piece, fromSquare));
     }
     
-    // En passant (if pawn)
-    if (piece.type === 'P' && board.enPassantTarget) {
+    // En passant (if pawn and certain at source)
+    if (piece.type === 'P' && board.enPassantTarget && piece.superposition[fromSquare] === 1.0) {
       const epMove = generateEnPassantMove(board, piece, fromSquare);
       if (epMove) moves.push(epMove);
     }
   }
   
   // Quantum moves (split and merge)
-  if (piece.superposition[fromSquare] === 1.0) {
+  // Allow split even for superposed pieces
+  if (piece.superposition[fromSquare] > 0) {
     moves.push(...generateSplitMoves(board, piece, fromSquare));
   }
   
@@ -125,6 +127,8 @@ function generateNormalMoves(
     const captureSquares = getPawnCaptureSquares(fromSquare, piece.color);
     for (const target of captureSquares) {
       const targetPiece = getPieceAt(board, target);
+      
+      // Check for classical enemy piece
       if (targetPiece && targetPiece.color !== piece.color) {
         moves.push({
           type: 'capture',
@@ -133,6 +137,21 @@ function generateNormalMoves(
           to: target,
           capturedPieceId: targetPiece.id,
         });
+      } else {
+        // Check for superposed enemy pieces
+        const superposedPieces = getPiecesAtSquare(board, target);
+        const enemyPieces = superposedPieces.filter(p => p.color !== piece.color);
+        
+        if (enemyPieces.length > 0) {
+          // Can capture superposed piece (will trigger measurement)
+          moves.push({
+            type: 'capture',
+            pieceId: piece.id,
+            from: fromSquare,
+            to: target,
+            capturedPieceId: enemyPieces[0].id, // Take first enemy piece
+          });
+        }
       }
     }
   } else {
@@ -157,13 +176,28 @@ function generateNormalMoves(
       const targetPiece = getPieceAt(board, target);
       
       if (!targetPiece) {
-        // Empty square - normal move
-        moves.push({
-          type: 'normal',
-          pieceId: piece.id,
-          from: fromSquare,
-          to: target,
-        });
+        // Check if there are superposed enemy pieces
+        const superposedPieces = getPiecesAtSquare(board, target);
+        const enemyPieces = superposedPieces.filter(p => p.color !== piece.color);
+        
+        if (enemyPieces.length > 0) {
+          // Can capture superposed piece (will trigger measurement)
+          moves.push({
+            type: 'capture',
+            pieceId: piece.id,
+            from: fromSquare,
+            to: target,
+            capturedPieceId: enemyPieces[0].id,
+          });
+        } else {
+          // Empty square - normal move
+          moves.push({
+            type: 'normal',
+            pieceId: piece.id,
+            from: fromSquare,
+            to: target,
+          });
+        }
       } else if (targetPiece.color !== piece.color) {
         // Enemy piece - capture
         moves.push({
@@ -425,25 +459,58 @@ function validateNormalMove(
 ): MoveValidationResult {
   const piece = getPieceById(board, move.pieceId)!;
   
-  // Piece must be certain at source
+  // If piece is in superposition at source, flag for measurement but allow the move
   if (piece.superposition[move.from] !== 1.0) {
     return {
-      isLegal: false,
-      reason: 'Piece is in superposition, measurement required',
+      isLegal: true,
       requiresMeasurement: true,
       measurementSquare: move.from,
     };
   }
   
+  // For sliding pieces, check if path is clear
+  if (isSlidingMove(piece.type, move.from, move.to)) {
+    const pathSquares = getSquaresBetween(move.from, move.to);
+    for (const sq of pathSquares) {
+      if (!isSquareCertainlyEmpty(board, sq)) {
+        // Path is blocked - need to check if it's certain or requires measurement
+        const occupancyProb = board.pieces.reduce((sum, p) => sum + (p.superposition[sq] || 0), 0);
+        if (occupancyProb > 0) {
+          return {
+            isLegal: false,
+            reason: 'Path is blocked',
+          };
+        }
+      }
+    }
+  }
+  
   // For captures, check if there's an enemy piece at target
   if (move.type === 'capture') {
     const targetPiece = getPieceAt(board, move.to);
-    if (!targetPiece || targetPiece.color === piece.color) {
+    
+    // Check for classical enemy piece
+    if (targetPiece && targetPiece.color !== piece.color) {
+      return { isLegal: true };
+    }
+    
+    // Check for superposed enemy pieces
+    const superposedPieces = getPiecesAtSquare(board, move.to);
+    const enemyPieces = superposedPieces.filter(p => p.color !== piece.color);
+    
+    if (enemyPieces.length > 0) {
+      // Capturing a superposed piece requires measurement
       return {
-        isLegal: false,
-        reason: 'Cannot capture: no enemy piece at target',
+        isLegal: true,
+        requiresMeasurement: true,
+        measurementSquare: move.to,
       };
     }
+    
+    return {
+      isLegal: false,
+      reason: 'Cannot capture: no enemy piece at target',
+    };
   } else {
     // For non-capture moves, check if move would violate double occupancy
     if (wouldViolateDoubleOccupancy(board, move.pieceId, move.to)) {
@@ -466,20 +533,49 @@ function validateSplitMove(
 ): MoveValidationResult {
   const piece = getPieceById(board, move.pieceId)!;
   
-  // Piece must be certain at source
+  // If piece is in superposition at source, flag for measurement but allow split
   if (piece.superposition[move.from] !== 1.0) {
     return {
-      isLegal: false,
-      reason: 'Cannot split piece in superposition',
+      isLegal: true,
+      requiresMeasurement: true,
+      measurementSquare: move.from,
     };
   }
   
-  // Targets must be empty
-  if (!isSquareCertainlyEmpty(board, move.to1) || !isSquareCertainlyEmpty(board, move.to2)) {
+  // Targets must be completely empty (no pieces with any probability)
+  if (!isSquareCertainlyEmpty(board, move.to1)) {
     return {
       isLegal: false,
-      reason: 'Split targets must be empty',
+      reason: 'Split target 1 is occupied',
     };
+  }
+  
+  if (!isSquareCertainlyEmpty(board, move.to2)) {
+    return {
+      isLegal: false,
+      reason: 'Split target 2 is occupied',
+    };
+  }
+  
+  // For sliding pieces, check paths are clear
+  if (isSlidingMove(piece.type, move.from, move.to1)) {
+    const path1 = getSquaresBetween(move.from, move.to1);
+    if (path1.some(sq => !isSquareCertainlyEmpty(board, sq))) {
+      return {
+        isLegal: false,
+        reason: 'Path to target 1 is blocked',
+      };
+    }
+  }
+  
+  if (isSlidingMove(piece.type, move.from, move.to2)) {
+    const path2 = getSquaresBetween(move.from, move.to2);
+    if (path2.some(sq => !isSquareCertainlyEmpty(board, sq))) {
+      return {
+        isLegal: false,
+        reason: 'Path to target 2 is blocked',
+      };
+    }
   }
   
   return { isLegal: true };

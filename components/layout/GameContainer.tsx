@@ -6,7 +6,6 @@ import { PlayerInfo } from '@/components/game/PlayerInfo';
 import { CapturedPieces } from '@/components/game/CapturedPieces';
 import { MoveHistory } from '@/components/game/MoveHistory';
 import { GameStats } from '@/components/game/GameStats';
-import { QuantumControls } from '@/components/quantum/QuantumControls';
 
 interface GameContainerProps {
   children: ReactNode;
@@ -28,7 +27,6 @@ export function GameContainer({ children }: GameContainerProps) {
           <aside className="space-y-4">
             <PlayerInfo />
             <GameStats />
-            <QuantumControls />
             <MoveHistory />
             <CapturedPieces />
           </aside>

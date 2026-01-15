@@ -2,9 +2,7 @@
 
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
-import type { PieceSymbol, Color, QuantumPiece } from '@/lib/types';
-import { QuantumIndicator } from '@/components/quantum/QuantumIndicator';
-import { ProbabilityOverlay } from '@/components/quantum/ProbabilityOverlay';
+import type { PieceSymbol, Color } from '@/lib/types';
 
 interface PieceProps {
   type: PieceSymbol;
@@ -12,7 +10,6 @@ interface PieceProps {
   probability?: number; // For quantum visualization
   isDragging?: boolean;
   className?: string;
-  quantumPiece?: QuantumPiece; // Full quantum piece data for overlay
 }
 
 /** Map piece type and color to image filename */
@@ -28,9 +25,9 @@ export function Piece({
   probability = 1.0,
   isDragging = false,
   className,
-  quantumPiece,
 }: PieceProps) {
   const imagePath = getPieceImagePath(type, color);
+  const isSuperposed = probability < 1.0;
 
   return (
     <div
@@ -41,8 +38,6 @@ export function Piece({
       )}
       style={{ opacity: probability }}
     >
-      {quantumPiece && <ProbabilityOverlay piece={quantumPiece} />}
-      
       <Image
         src={imagePath}
         alt={`${color} ${type}`}
@@ -52,7 +47,11 @@ export function Piece({
         draggable={false}
       />
       
-      <QuantumIndicator probability={probability} />
+      {isSuperposed && (
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full bg-violet-600/90 px-2 py-0.5 text-xs font-bold text-white shadow-md">
+          {Math.round(probability * 100)}%
+        </div>
+      )}
     </div>
   );
 }

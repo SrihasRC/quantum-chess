@@ -1,18 +1,20 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Square } from './Square';
 import { Piece } from './Piece';
 import { useGameStore } from '@/lib/store/gameStore';
-import { getPieceAt, getPieceById } from '@/lib/engine/state';
+import { getPieceAt } from '@/lib/engine/state';
 import { indexToAlgebraic } from '@/lib/engine/utils';
 import type { SquareIndex } from '@/lib/types';
+import type { MoveMode } from '@/components/game/MoveModSelector';
 
-// Custom event for quantum mode activation
-export const QUANTUM_MODE_EVENT = 'quantum-mode-change';
+interface ChessboardProps {
+  mode: MoveMode;
+}
 
-export function Chessboard() {
+export function Chessboard({ mode }: ChessboardProps) {
   const board = useGameStore((state) => state.board);
   const selectedSquare = useGameStore((state) => state.selectedSquare);
   const legalMoves = useGameStore((state) => state.legalMoves);
@@ -20,71 +22,25 @@ export function Chessboard() {
   const movePiece = useGameStore((state) => state.movePiece);
   
   // Split move state
-  const [splitMode, setSplitMode] = useState(false);
   const [splitSource, setSplitSource] = useState<SquareIndex | null>(null);
   const [splitTargets, setSplitTargets] = useState<SquareIndex[]>([]);
   
   // Merge move state
-  const [mergeMode, setMergeMode] = useState(false);
   const [mergeSources, setMergeSources] = useState<SquareIndex[]>([]);
   const [mergeTarget, setMergeTarget] = useState<SquareIndex | null>(null);
 
-  /** Enable split move mode (called from QuantumControls) */
-  const enableSplitMode = useCallback(() => {
-    setSplitMode(true);
-    setMergeMode(false);
-    setSplitSource(null);
-    setSplitTargets([]);
-  }, []);
+  // Determine active mode
+  const splitMode = mode === 'split';
+  const mergeMode = mode === 'merge';
 
-  /** Enable merge move mode (called from QuantumControls) */
-  const enableMergeMode = useCallback(() => {
-    setMergeMode(true);
-    setSplitMode(false);
-    setMergeSources([]);
-    setMergeTarget(null);
-  }, []);
-
-  /** Cancel quantum move mode */
-  const cancelQuantumMode = useCallback(() => {
-    setSplitMode(false);
-    setMergeMode(false);
+  // Reset quantum move state when mode changes
+  useEffect(() => {
+    // Clear any partial selections when mode changes
     setSplitSource(null);
     setSplitTargets([]);
     setMergeSources([]);
     setMergeTarget(null);
-  }, []);
-
-  // Listen for quantum mode events from QuantumControls
-  useEffect(() => {
-    const handleQuantumMode = (event: Event) => {
-      const customEvent = event as CustomEvent<{ mode: 'split' | 'merge' | 'cancel' }>;
-      const { mode } = customEvent.detail;
-      
-      if (mode === 'split') {
-        enableSplitMode();
-      } else if (mode === 'merge') {
-        enableMergeMode();
-      } else if (mode === 'cancel') {
-        cancelQuantumMode();
-      }
-    };
-
-    window.addEventListener(QUANTUM_MODE_EVENT, handleQuantumMode);
-    return () => window.removeEventListener(QUANTUM_MODE_EVENT, handleQuantumMode);
-  }, [cancelQuantumMode, enableMergeMode, enableSplitMode]);
-
-  // Listen for ESC key to cancel quantum mode
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && (splitMode || mergeMode)) {
-        cancelQuantumMode();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [splitMode, mergeMode, cancelQuantumMode]);
+  }, [mode]);
 
   /** Handle square click with support for split/merge modes */
   const handleSquareClick = (square: SquareIndex) => {
@@ -128,8 +84,7 @@ export function Chessboard() {
               description: `Piece split into superposition: ${indexToAlgebraic(newTargets[0])} and ${indexToAlgebraic(newTargets[1])}`,
             });
           }
-          // Reset split mode
-          setSplitMode(false);
+          // Reset split state (mode persists unless user changes it)
           setSplitSource(null);
           setSplitTargets([]);
         }
@@ -169,8 +124,7 @@ export function Chessboard() {
         });
       }
       
-      // Reset merge mode
-      setMergeMode(false);
+      // Reset merge state (mode persists unless user changes it)
       setMergeSources([]);
       setMergeTarget(null);
     }
@@ -261,9 +215,6 @@ export function Chessboard() {
         const isSelected = isSquareHighlighted(index);
         const isLegalMove = isLegalMoveSquare(index);
 
-        // Get full quantum piece data for probability overlay
-        const quantumPiece = piece ? getPieceById(board, piece.id) : undefined;
-
         squares.push(
           <Square
             key={index}
@@ -278,7 +229,6 @@ export function Chessboard() {
                 type={piece.type}
                 color={piece.color}
                 probability={probability}
-                quantumPiece={quantumPiece || undefined}
               />
             )}
           </Square>
@@ -290,23 +240,7 @@ export function Chessboard() {
   };
 
   return (
-    <div className="w-full max-w-2xl">
-      {/* Mode indicator */}
-      {(splitMode || mergeMode) && (
-        <div className="mb-4 rounded-lg border-2 border-primary bg-primary/10 p-3 text-center">
-          <p className="font-semibold text-primary">
-            {splitMode && `Split Mode: ${splitSource ? `Select ${2 - splitTargets.length} target square(s)` : 'Select piece to split'}`}
-            {mergeMode && `Merge Mode: ${mergeSources.length < 2 ? `Select ${2 - mergeSources.length} superposed piece(s)` : 'Select target square'}`}
-          </p>
-          <button
-            onClick={cancelQuantumMode}
-            className="mt-2 text-sm text-muted-foreground hover:text-foreground"
-          >
-            Cancel (ESC)
-          </button>
-        </div>
-      )}
-      
+    <div className="w-full max-w-3xl">
       <div className="aspect-square w-full overflow-hidden rounded-lg border-4 border-border shadow-xl">
         <div className="grid h-full w-full grid-cols-8 grid-rows-8">
           {renderSquares()}
