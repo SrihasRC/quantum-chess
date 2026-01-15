@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { Square } from './Square';
 import { Piece } from './Piece';
 import { useGameStore } from '@/lib/store/gameStore';
-import { getPieceAt } from '@/lib/engine/state';
+import { getPieceAt, getPiecesAtSquare } from '@/lib/engine/state';
 import { validateMove } from '@/lib/engine/moves';
 import { indexToAlgebraic } from '@/lib/engine/utils';
 import type { SquareIndex } from '@/lib/types';
@@ -63,8 +63,19 @@ export function Chessboard({ mode }: ChessboardProps) {
   /** Handle click during split move selection */
   const handleSplitModeClick = (square: SquareIndex) => {
     if (!splitSource) {
-      // First click: select source
-      const piece = getPieceAt(board, square);
+      // First click: select source (allow both classical and superposed pieces)
+      let piece = getPieceAt(board, square);
+      
+      // If no classical piece, check for superposed pieces
+      if (!piece) {
+        const superposedPieces = getPiecesAtSquare(board, square);
+        const playerSuperposedPieces = superposedPieces.filter(p => p.color === board.activeColor);
+        
+        if (playerSuperposedPieces.length > 0) {
+          piece = playerSuperposedPieces[0];
+        }
+      }
+      
       if (piece && piece.color === board.activeColor) {
         setSplitSource(square);
       }
@@ -76,7 +87,18 @@ export function Chessboard({ mode }: ChessboardProps) {
         
         // Execute split move if we have both targets
         if (newTargets.length === 2) {
-          const piece = getPieceAt(board, splitSource);
+          // Get piece at split source (could be classical or superposed)
+          let piece = getPieceAt(board, splitSource);
+          
+          if (!piece) {
+            const superposedPieces = getPiecesAtSquare(board, splitSource);
+            const playerSuperposedPieces = superposedPieces.filter(p => p.color === board.activeColor);
+            
+            if (playerSuperposedPieces.length > 0) {
+              piece = playerSuperposedPieces[0];
+            }
+          }
+          
           if (piece) {
             const splitMove = {
               type: 'split' as const,

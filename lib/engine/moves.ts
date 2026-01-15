@@ -534,29 +534,20 @@ function validateSplitMove(
 ): MoveValidationResult {
   const piece = getPieceById(board, move.pieceId)!;
   
-  // If piece is in superposition at source, flag for measurement but allow split
-  if (piece.superposition[move.from] !== 1.0) {
-    return {
-      isLegal: true,
-      requiresMeasurement: true,
-      measurementSquare: move.from,
-    };
-  }
-  
-  // Check that both targets are legal moves for this piece type
+  // Check that both targets are legal moves for this piece type from the source square
   const validTargets = getPieceTargetSquares(piece.type, move.from, piece.color);
   
   if (!validTargets.includes(move.to1)) {
     return {
       isLegal: false,
-      reason: `Target 1 (${indexToAlgebraic(move.to1)}) is not a legal move for ${piece.type}`,
+      reason: `Target 1 (${indexToAlgebraic(move.to1)}) is not a legal move for ${piece.type} from ${indexToAlgebraic(move.from)}`,
     };
   }
   
   if (!validTargets.includes(move.to2)) {
     return {
       isLegal: false,
-      reason: `Target 2 (${indexToAlgebraic(move.to2)}) is not a legal move for ${piece.type}`,
+      reason: `Target 2 (${indexToAlgebraic(move.to2)}) is not a legal move for ${piece.type} from ${indexToAlgebraic(move.from)}`,
     };
   }
   
@@ -596,8 +587,18 @@ function validateSplitMove(
     }
   }
   
+  // Check piece has some probability at source square
+  if (!piece.superposition[move.from] || piece.superposition[move.from] === 0) {
+    return {
+      isLegal: false,
+      reason: 'Piece is not at the source square',
+    };
+  }
+  
+  // Split moves don't require measurement - they work on whatever probability exists
   return { isLegal: true };
 }
+
 
 /**
  * Validate merge move
