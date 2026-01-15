@@ -19,6 +19,8 @@ export function Chessboard({ mode }: ChessboardProps) {
   const board = useGameStore((state) => state.board);
   const selectedSquare = useGameStore((state) => state.selectedSquare);
   const legalMoves = useGameStore((state) => state.legalMoves);
+  const currentMoveIndex = useGameStore((state) => state.currentMoveIndex);
+  const moveHistory = useGameStore((state) => state.moveHistory);
   const selectPiece = useGameStore((state) => state.selectPiece);
   const movePiece = useGameStore((state) => state.movePiece);
   
@@ -62,6 +64,14 @@ export function Chessboard({ mode }: ChessboardProps) {
 
   /** Handle click during split move selection */
   const handleSplitModeClick = (square: SquareIndex) => {
+    // Prevent interaction when viewing history
+    if (currentMoveIndex < moveHistory.length - 1) {
+      toast.info('Viewing history', {
+        description: 'Navigate to the latest move to continue playing',
+      });
+      return;
+    }
+    
     if (!splitSource) {
       // First click: select source (allow both classical and superposed pieces)
       let piece = getPieceAt(board, square);
@@ -135,6 +145,14 @@ export function Chessboard({ mode }: ChessboardProps) {
 
   /** Handle click during merge move selection */
   const handleMergeModeClick = (square: SquareIndex) => {
+    // Prevent interaction when viewing history
+    if (currentMoveIndex < moveHistory.length - 1) {
+      toast.info('Viewing history', {
+        description: 'Navigate to the latest move to continue playing',
+      });
+      return;
+    }
+    
     if (mergeSources.length < 2) {
       // First two clicks: select source squares
       const piece = getPieceAt(board, square);
@@ -281,7 +299,7 @@ export function Chessboard({ mode }: ChessboardProps) {
   };
 
   return (
-    <div className="w-full max-w-3xl">
+    <div className="w-full max-w-xl">
       <div className="aspect-square w-full overflow-hidden rounded-lg border-4 border-border shadow-xl">
         <div className="grid h-full w-full grid-cols-8 grid-rows-8">
           {renderSquares()}

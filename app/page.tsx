@@ -19,7 +19,7 @@ export default function Home() {
   return (
     <>
       <GameContainer>
-        <div className="flex w-full items-center gap-6">
+        <div className="flex w-2xl items-center gap-6">
           <div className="shrink-0">
             <MoveModSelector mode={moveMode} onModeChange={setMoveMode} />
           </div>

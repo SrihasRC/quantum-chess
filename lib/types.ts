@@ -258,6 +258,8 @@ export interface GameState {
   entanglements: Entanglement[];
   selectedSquare: SquareIndex | null; // currently selected square
   legalMoves: Move[]; // legal moves for selected piece
+  boardStateHistory: BoardState[]; // history of board states for navigation
+  currentMoveIndex: number; // -1 = before any moves, 0 = after first move, etc.
 }
 
 // UI State

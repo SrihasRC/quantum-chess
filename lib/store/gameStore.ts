@@ -56,6 +56,13 @@ interface GameStore extends GameState {
   newGame: () => void;
   resetSelection: () => void;
   
+  // Navigation actions
+  goToMove: (index: number) => void;
+  goToFirst: () => void;
+  goToPrevious: () => void;
+  goToNext: () => void;
+  goToLast: () => void;
+  
   // Helper methods
   canSelectSquare: (square: SquareIndex) => boolean;
   isSquareHighlighted: (square: SquareIndex) => boolean;
@@ -64,14 +71,17 @@ interface GameStore extends GameState {
 // Initial State
 
 function createInitialGameState(): GameState {
+  const initialBoard = createInitialBoardState();
   return {
-    board: createInitialBoardState(),
+    board: initialBoard,
     status: 'active',
     moveHistory: [],
     capturedPieces: [],
     entanglements: [],
     selectedSquare: null,
     legalMoves: [],
+    boardStateHistory: [cloneBoardState(initialBoard)], // Store initial board state
+    currentMoveIndex: -1, // -1 means at initial position, before any moves
   };
 }
 
@@ -84,6 +94,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
   
   selectPiece: (square: SquareIndex) => {
     const state = get();
+    
+    // Prevent selection when viewing history (not at latest position)
+    if (state.currentMoveIndex < state.moveHistory.length - 1) {
+      toast.info('Viewing history', {
+        description: 'Navigate to the latest move to continue playing',
+      });
+      return;
+    }
     
     // If clicking on already selected square, deselect
     if (state.selectedSquare === square) {
@@ -148,6 +166,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
   
   movePiece: (move: Move) => {
     const state = get();
+    
+    // Prevent moves when viewing history (not at latest position)
+    if (state.currentMoveIndex < state.moveHistory.length - 1) {
+      toast.info('Viewing history', {
+        description: 'Navigate to the latest move to continue playing',
+      });
+      return;
+    }
     
     // Validate move
     const validation = validateMove(state.board, move);
@@ -321,10 +347,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
       timestamp: Date.now(),
     };
     
+    // Update state with new board, history, and save board state
+    const currentState = get();
+    const newHistory = [...currentState.moveHistory, historyEntry];
+    const newBoardHistory = [...currentState.boardStateHistory, cloneBoardState(newBoard)];
+    
     set({
       board: newBoard,
       status: newStatus,
-      moveHistory: [...state.moveHistory, historyEntry],
+      moveHistory: newHistory,
+      boardStateHistory: newBoardHistory,
+      currentMoveIndex: newHistory.length - 1, // Set to latest move
       selectedSquare: null,
       legalMoves: [],
     });
@@ -333,8 +366,84 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // Undo Move
   
   undoMove: () => {
-    // TODO: Implement undo (requires storing board states)
-    console.warn('Undo not yet implemented');
+    const state = get();
+    
+    // Can only undo if we have moves and we're at the latest position
+    if (state.moveHistory.length === 0 || state.currentMoveIndex < state.moveHistory.length - 1) {
+      return;
+    }
+    
+    // Go to previous move (which is currentMoveIndex - 1, or -1 if first move)
+    const targetIndex = state.currentMoveIndex - 1;
+    
+    // Remove the last move from history
+    const newHistory = state.moveHistory.slice(0, -1);
+    const newBoardHistory = state.boardStateHistory.slice(0, -1);
+    
+    // Restore the board state
+    const restoredBoard = targetIndex >= 0 
+      ? cloneBoardState(newBoardHistory[targetIndex + 1]) // +1 because index 0 is initial state
+      : cloneBoardState(newBoardHistory[0]); // back to initial state
+    
+    set({
+      board: restoredBoard,
+      moveHistory: newHistory,
+      boardStateHistory: newBoardHistory,
+      currentMoveIndex: targetIndex,
+      selectedSquare: null,
+      legalMoves: [],
+    });
+    
+    toast.info('Move undone');
+  },
+  
+  // Navigation Actions (Read-only time-travel)
+  
+  goToMove: (index: number) => {
+    const state = get();
+    
+    // Validate index: -1 = initial position, 0 to moveHistory.length - 1 = after each move
+    if (index < -1 || index >= state.moveHistory.length) {
+      return;
+    }
+    
+    // Restore board state at the requested index
+    // boardStateHistory[0] = initial state
+    // boardStateHistory[1] = after move 0
+    // boardStateHistory[i+1] = after move i
+    const restoredBoard = cloneBoardState(state.boardStateHistory[index + 1]);
+    
+    set({
+      board: restoredBoard,
+      currentMoveIndex: index,
+      selectedSquare: null,
+      legalMoves: [],
+    });
+  },
+  
+  goToFirst: () => {
+    get().goToMove(-1); // Go to initial position
+  },
+  
+  goToPrevious: () => {
+    const state = get();
+    if (state.currentMoveIndex > -1) {
+      get().goToMove(state.currentMoveIndex - 1);
+    }
+  },
+  
+  goToNext: () => {
+    const state = get();
+    if (state.currentMoveIndex < state.moveHistory.length - 1) {
+      get().goToMove(state.currentMoveIndex + 1);
+    }
+  },
+  
+  goToLast: () => {
+    const state = get();
+    if (state.moveHistory.length > 0) {
+      get().goToMove(state.moveHistory.length - 1);
+    }
   },
   
   // New Game

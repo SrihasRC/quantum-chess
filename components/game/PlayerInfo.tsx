@@ -10,27 +10,27 @@ export function PlayerInfo() {
   const status = useGameStore((state) => state.status);
 
   return (
-    <Card className="p-4">
-      <div className="space-y-4">
+    <Card className="p-3">
+      <div className="space-y-2">
         {/* White Player */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Circle className="h-5 w-5 fill-white stroke-border" />
-            <span className="font-semibold">White</span>
+            <Circle className="h-4 w-4 fill-white stroke-border" />
+            <span className="font-semibold text-sm">White</span>
           </div>
           {activeColor === 'white' && status === 'active' && (
-            <Badge variant="default">Your Turn</Badge>
+            <Badge variant="default" className="text-xs">Your Turn</Badge>
           )}
         </div>
 
         {/* Black Player */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Circle className="h-5 w-5 fill-foreground stroke-border" />
-            <span className="font-semibold">Black</span>
+            <Circle className="h-4 w-4 fill-foreground stroke-border" />
+            <span className="font-semibold text-sm">Black</span>
           </div>
           {activeColor === 'black' && status === 'active' && (
-            <Badge variant="default">Your Turn</Badge>
+            <Badge variant="default" className="text-xs">Your Turn</Badge>
           )}
         </div>
       </div>
