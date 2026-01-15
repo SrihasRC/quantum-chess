@@ -6,7 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { useGameStore } from '@/lib/store/gameStore';
 import { Sparkles, GitMerge } from 'lucide-react';
 import { useState } from 'react';
-import { QUANTUM_MODE_EVENT } from '@/components/board/Chessboard';
+
+// Note: This component is deprecated - MoveModSelector is now used instead
+const QUANTUM_MODE_EVENT = 'quantum-mode-change';
 
 export function QuantumControls() {
   const selectedSquare = useGameStore((state) => state.selectedSquare);

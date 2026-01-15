@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { Square } from './Square';
 import { Piece } from './Piece';
@@ -34,12 +34,18 @@ export function Chessboard({ mode }: ChessboardProps) {
   const mergeMode = mode === 'merge';
 
   // Reset quantum move state when mode changes
+  const prevModeRef = useRef(mode);
   useEffect(() => {
-    // Clear any partial selections when mode changes
-    setSplitSource(null);
-    setSplitTargets([]);
-    setMergeSources([]);
-    setMergeTarget(null);
+    if (prevModeRef.current !== mode) {
+      prevModeRef.current = mode;
+      // Use setTimeout to defer state updates to avoid cascading renders
+      setTimeout(() => {
+        setSplitSource(null);
+        setSplitTargets([]);
+        setMergeSources([]);
+        setMergeTarget(null);
+      }, 0);
+    }
   }, [mode]);
 
   /** Handle square click with support for split/merge modes */
