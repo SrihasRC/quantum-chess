@@ -194,61 +194,64 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return;
     }
     
-    // Handle measurement if required
+    // For captures, ALWAYS measure attacker if in superposition (before target measurement)
+    if (move.type === 'capture') {
+      let currentBoard = state.board;
+      const piece = getPieceById(currentBoard, move.pieceId);
+      
+      if (piece && piece.superposition[move.from] !== 1.0) {
+        const probAtSource = piece.superposition[move.from] || 0;
+        const roll = Math.random();
+        
+        if (roll > probAtSource) {
+          // Measurement failed - attacker not at source square
+          console.log('Measurement failed - attacker not at source square');
+          toast.error('Measurement Failed', {
+            description: `Your piece was not found at ${indexToAlgebraic(move.from)} (${Math.round(probAtSource * 100)}% chance). Turn lost.`,
+          });
+          
+          // Remove probability from source and renormalize
+          const newSuperposition: Record<number, number> = {};
+          for (const [square, prob] of Object.entries(piece.superposition)) {
+            const sq = parseInt(square);
+            if (sq !== move.from) {
+              newSuperposition[sq] = prob;
+            }
+          }
+          
+          const totalProb = Object.values(newSuperposition).reduce((sum, p) => sum + p, 0);
+          if (totalProb > 0) {
+            for (const square in newSuperposition) {
+              newSuperposition[square] = newSuperposition[square] / totalProb;
+            }
+            currentBoard = updatePieceSuperposition(currentBoard, move.pieceId, newSuperposition);
+          } else {
+            currentBoard = removePiece(currentBoard, move.pieceId);
+          }
+          
+          // Switch turn since measurement counts as the move
+          const finalBoard = switchTurn(currentBoard);
+          set({ 
+            board: finalBoard,
+            selectedSquare: null,
+            legalMoves: [],
+          });
+          return;
+        }
+        
+        // Measurement succeeded - collapse attacker to source
+        currentBoard = updatePieceSuperposition(currentBoard, move.pieceId, { [move.from]: 1.0 });
+      }
+      
+      // Update board state for subsequent target measurement
+      set({ board: currentBoard });
+    }
+    
+    // Handle target measurement if required
     if (validation.requiresMeasurement && validation.measurementSquare !== undefined) {
       let currentBoard = state.board;
       
-      // For captures, measure both attacker and target if in superposition
-      if (move.type === 'capture') {
-        const piece = getPieceById(currentBoard, move.pieceId);
-        
-        // Measure attacker if in superposition at source
-        if (piece && piece.superposition[move.from] !== 1.0) {
-          const probAtSource = piece.superposition[move.from] || 0;
-          const roll = Math.random();
-          
-          if (roll > probAtSource) {
-            // Measurement failed - attacker not at source square
-            console.log('Measurement failed - attacker not at source square');
-            toast.error('Measurement Failed', {
-              description: `Your piece was not found at ${indexToAlgebraic(move.from)} (${Math.round(probAtSource * 100)}% chance). Turn lost.`,
-            });
-            
-            // Remove probability from source and renormalize
-            const newSuperposition: Record<number, number> = {};
-            for (const [square, prob] of Object.entries(piece.superposition)) {
-              const sq = parseInt(square);
-              if (sq !== move.from) {
-                newSuperposition[sq] = prob;
-              }
-            }
-            
-            const totalProb = Object.values(newSuperposition).reduce((sum, p) => sum + p, 0);
-            if (totalProb > 0) {
-              for (const square in newSuperposition) {
-                newSuperposition[square] = newSuperposition[square] / totalProb;
-              }
-              currentBoard = updatePieceSuperposition(currentBoard, move.pieceId, newSuperposition);
-            } else {
-              currentBoard = removePiece(currentBoard, move.pieceId);
-            }
-            
-            // Switch turn since measurement counts as the move
-            const finalBoard = switchTurn(currentBoard);
-            set({ 
-              board: finalBoard,
-              selectedSquare: null,
-              legalMoves: [],
-            });
-            return;
-          }
-          
-          // Measurement succeeded - collapse attacker to source
-          currentBoard = updatePieceSuperposition(currentBoard, move.pieceId, { [move.from]: 1.0 });
-        }
-        
-        // Measure target if in superposition
-        if (move.capturedPieceId) {
+      if (move.type === 'capture' && move.capturedPieceId) {
           const targetPiece = getPieceById(currentBoard, move.capturedPieceId);
           if (targetPiece && targetPiece.superposition[move.to] !== 1.0) {
             // Perform PARTIAL measurement - check if piece is at capture square
@@ -319,7 +322,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
             currentBoard = updatePieceSuperposition(currentBoard, move.capturedPieceId, { [move.to]: 1.0 });
           }
         }
-      }
       
       set({ board: currentBoard });
     }
