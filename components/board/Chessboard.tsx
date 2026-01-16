@@ -153,14 +153,56 @@ export function Chessboard({ mode }: ChessboardProps) {
       return;
     }
     
-    if (mergeSources.length < 2) {
-      // First two clicks: select source squares
-      const piece = getPieceAt(board, square);
-      if (piece && piece.color === board.activeColor && !mergeSources.includes(square)) {
-        setMergeSources([...mergeSources, square]);
+    if (mergeSources.length === 0) {
+      // First click: select first source square (must be a piece, preferably superposed)
+      const pieces = getPiecesAtSquare(board, square);
+      const playerPieces = pieces.filter(p => p.color === board.activeColor);
+      
+      if (playerPieces.length > 0) {
+        setMergeSources([square]);
       }
-    } else if (!mergeTarget) {
-      // Third click: select target
+    } else if (mergeSources.length === 1) {
+      // Second click: check if it's the same piece at different location (direct merge)
+      // OR if it's a different square to merge via a target
+      const firstSquarePieces = getPiecesAtSquare(board, mergeSources[0]);
+      const secondSquarePieces = getPiecesAtSquare(board, square);
+      
+      // Find common pieces between both squares
+      const commonPiece = firstSquarePieces.find(p1 => 
+        secondSquarePieces.some(p2 => p1.id === p2.id && p1.color === board.activeColor)
+      );
+      
+      if (commonPiece && square !== mergeSources[0]) {
+        // Same piece at both locations - direct merge to the second location
+        movePiece({
+          type: 'merge',
+          pieceId: commonPiece.id,
+          from1: mergeSources[0],
+          from2: square,
+          to: square, // Merge directly to second location
+        });
+        
+        toast.success('Direct Merge', {
+          description: `Superposition combined at ${indexToAlgebraic(square)}`,
+        });
+        
+        // Reset merge state
+        setMergeSources([]);
+      } else {
+        // Different piece or location - add as second source for 3-way merge
+        const piece = getPieceAt(board, square);
+        if (piece && piece.color === board.activeColor && !mergeSources.includes(square)) {
+          setMergeSources([...mergeSources, square]);
+        } else {
+          // Invalid selection - reset
+          toast.error('Invalid Selection', {
+            description: 'Select two locations of the same superposed piece, or select a third target square',
+          });
+          setMergeSources([]);
+        }
+      }
+    } else if (mergeSources.length === 2 && !mergeTarget) {
+      // Third click: select target for 3-way merge
       setMergeTarget(square);
       
       // Execute merge move
@@ -218,8 +260,9 @@ export function Chessboard({ mode }: ChessboardProps) {
     // In merge mode, highlight mergeable pieces or target
     if (mergeMode) {
       if (mergeSources.length < 2) {
-        const piece = getPieceAt(board, square);
-        return piece !== null && piece.color === board.activeColor && piece.isSuperposed;
+        // Highlight squares with player's pieces (superposed or classical)
+        const pieces = getPiecesAtSquare(board, square);
+        return pieces.some(p => p.color === board.activeColor);
       }
       return true; // Any square can be merge target
     }

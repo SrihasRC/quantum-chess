@@ -100,7 +100,13 @@ function generateNormalMoves(
   if (piece.type === 'P') {
     // Forward moves (non-capturing)
     for (const target of targets) {
-      if (isSquareCertainlyEmpty(board, target)) {
+      // Check if target is empty or has the same pawn in superposition
+      const targetPieces = getPiecesAtSquare(board, target);
+      const samePawn = targetPieces.find(p => p.id === piece.id);
+      const otherPieces = targetPieces.filter(p => p.id !== piece.id);
+      
+      if (otherPieces.length === 0) {
+        // Square is empty or only has same pawn - can move
         // Check if two-square pawn move requires clear path
         if (Math.abs(target - fromSquare) === 16) {
           const between = getSquaresBetween(fromSquare, target);
@@ -181,12 +187,21 @@ function generateNormalMoves(
       const targetPiece = getPieceAt(board, target);
       
       if (!targetPiece) {
-        // Check if there are superposed enemy pieces
+        // Check if there are superposed pieces at target
         const superposedPieces = getPiecesAtSquare(board, target);
         const enemyPieces = superposedPieces.filter(p => p.color !== piece.color);
+        const samePiece = superposedPieces.find(p => p.id === piece.id);
         
-        if (enemyPieces.length > 0) {
-          // Can capture superposed piece (will trigger measurement)
+        if (samePiece) {
+          // Same piece exists in superposition at target - allow move (will combine probabilities)
+          moves.push({
+            type: 'normal',
+            pieceId: piece.id,
+            from: fromSquare,
+            to: target,
+          });
+        } else if (enemyPieces.length > 0) {
+          // Can capture superposed enemy piece (will trigger measurement)
           moves.push({
             type: 'capture',
             pieceId: piece.id,
@@ -212,8 +227,16 @@ function generateNormalMoves(
           to: target,
           capturedPieceId: targetPiece.id,
         });
+      } else if (targetPiece.id === piece.id) {
+        // Same piece at target (in superposition) - allow move to combine probabilities
+        moves.push({
+          type: 'normal',
+          pieceId: piece.id,
+          from: fromSquare,
+          to: target,
+        });
       }
-      // Friendly piece - skip
+      // Different friendly piece - skip
     }
   }
   
@@ -240,9 +263,13 @@ function generateSplitMoves(
       const target1 = targets[i];
       const target2 = targets[j];
       
-      // Both targets must be empty (split cannot capture)
-      if (!isSquareCertainlyEmpty(board, target1)) continue;
-      if (!isSquareCertainlyEmpty(board, target2)) continue;
+      // Check if targets are occupied by OTHER pieces (not allowed)
+      // But allow splitting to squares where THIS SAME piece already has superposition
+      const target1Pieces = getPiecesAtSquare(board, target1).filter(p => p.id !== piece.id);
+      const target2Pieces = getPiecesAtSquare(board, target2).filter(p => p.id !== piece.id);
+      
+      if (target1Pieces.length > 0) continue; // Occupied by other piece(s)
+      if (target2Pieces.length > 0) continue; // Occupied by other piece(s)
       
       // For sliding pieces, check paths
       if (isSlidingMove(piece.type, fromSquare, target1)) {
@@ -548,18 +575,21 @@ function validateSplitMove(
     };
   }
   
-  // Targets must be completely empty (no pieces with any probability)
-  if (!isSquareCertainlyEmpty(board, move.to1)) {
+  // Targets must be empty OR contain the same piece (per paper's possibility equation)
+  const target1Pieces = getPiecesAtSquare(board, move.to1).filter(p => p.id !== piece.id);
+  const target2Pieces = getPiecesAtSquare(board, move.to2).filter(p => p.id !== piece.id);
+  
+  if (target1Pieces.length > 0) {
     return {
       isLegal: false,
-      reason: 'Split target 1 is occupied',
+      reason: 'Split target 1 is occupied by another piece',
     };
   }
   
-  if (!isSquareCertainlyEmpty(board, move.to2)) {
+  if (target2Pieces.length > 0) {
     return {
       isLegal: false,
-      reason: 'Split target 2 is occupied',
+      reason: 'Split target 2 is occupied by another piece',
     };
   }
   
