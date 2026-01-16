@@ -72,7 +72,7 @@ export function MoveHistory() {
       </div>
       
       {/* Navigation Controls */}
-      <div className="flex gap-1 mb-2">
+      <div className="flex gap-1 mb-1">
         <Button
           variant="outline"
           size="sm"
@@ -115,7 +115,7 @@ export function MoveHistory() {
         </Button>
       </div>
       
-      <div className="max-h-60 overflow-y-auto space-y-0.5">
+      <div className="h-36 overflow-y-auto space-y-0.5 flex flex-col-reverse">
         {moveHistory.length === 0 ? (
           <p className="text-xs text-muted-foreground">No moves yet</p>
         ) : (

@@ -15,6 +15,7 @@ import {
   updatePieceSuperposition,
   cloneBoardState,
 } from './state';
+import { getSquaresBetween } from './utils';
 
 /**
  * Create joint state key from piece positions
@@ -105,12 +106,13 @@ export function createMoveEntanglement(
 
 /**
  * Create entanglement for split move through superposition
- * Creates 3-way split when one or both paths are blocked
+ * Following the paper's Split Slide Unitary specification:
+ * - Both paths clear: Full split (target1: split%, target2: (1-split)%)
+ * - Path 1 blocked, path 2 clear: Full iSwap to target2
+ * - Path 1 clear, path 2 blocked: Full iSwap to target1
+ * - Both paths blocked: Identity (stay at source)
  * 
- * Joint states:
- * - (A=target1, B≠x) with prob (1-p1) * split1
- * - (A=target2, B≠x) with prob (1-p2) * split2
- * - (A=source, B at blocker) with prob (p1*split1 + p2*split2)
+ * Joint states created based on path blocking probabilities
  */
 export function createSplitEntanglement(
   board: BoardState,
@@ -131,61 +133,99 @@ export function createSplitEntanglement(
   const movingPiece = getPieceById(board, movingPieceId);
   if (!movingPiece) throw new Error('Moving piece not found');
   
-  // For simplicity, handle single blocker first
-  // TODO: Multi-blocker entanglement
-  const blockingPieceId = blockingPieceIds[0];
-  const blockSquare = blockSquares[0];
-  const blockProb = blockProbabilities[0];
+  // Determine which paths are blocked
+  // If we have one blocker, it might block one or both paths
+  // If we have two blockers, each blocks a different path
+  let path1BlockProb = 0;
+  let path2BlockProb = 0;
+  const involvedPieces = new Set<string>([movingPieceId]);
   
-  const blockingPiece = getPieceById(board, blockingPieceId);
-  if (!blockingPiece) throw new Error('Blocking piece not found');
+  if (blockingPieceIds.length === 1) {
+    // Single blocker - determine which path(s) it blocks
+    const blockSquare = blockSquares[0];
+    const blockProb = blockProbabilities[0];
+    involvedPieces.add(blockingPieceIds[0]);
+    
+    // Check if blocker is in path 1 (source to target1)
+    const path1 = getSquaresBetween(sourceSquare, target1);
+    if (path1.includes(blockSquare)) {
+      path1BlockProb = blockProb;
+    }
+    
+    // Check if blocker is in path 2 (source to target2)
+    const path2 = getSquaresBetween(sourceSquare, target2);
+    if (path2.includes(blockSquare)) {
+      path2BlockProb = blockProb;
+    }
+  } else {
+    // Two blockers - assign to respective paths
+    path1BlockProb = blockProbabilities[0];
+    path2BlockProb = blockProbabilities[1];
+    involvedPieces.add(blockingPieceIds[0]);
+    involvedPieces.add(blockingPieceIds[1]);
+  }
   
   const jointStates: JointState = {};
-  const split1 = splitRatio;
-  const split2 = 1 - splitRatio;
   
-  // Branch 1: Target 1 succeeds (blocker not at block square)
-  const success1Prob = (1 - blockProb) * split1;
-  if (success1Prob > 0) {
-    for (const [sq, prob] of Object.entries(blockingPiece.superposition)) {
-      const square = parseInt(sq);
-      if (square !== blockSquare) {
+  // Get all involved pieces and their current superpositions
+  const pieceStates = new Map<string, SuperpositionState>();
+  for (const pieceId of involvedPieces) {
+    const piece = getPieceById(board, pieceId);
+    if (piece) pieceStates.set(pieceId, piece.superposition);
+  }
+  
+  // Apply Split Slide Unitary logic based on path blocking
+  // For simplicity with single blocker, enumerate the blocker's positions
+  if (blockingPieceIds.length === 1) {
+    const blockingPieceId = blockingPieceIds[0];
+    const blockingPiece = getPieceById(board, blockingPieceId);
+    if (!blockingPiece) throw new Error('Blocking piece not found');
+    
+    for (const [sq, blockerProb] of Object.entries(blockingPiece.superposition)) {
+      const blockerSquare = parseInt(sq);
+      const blockSquare = blockSquares[0];
+      
+      // Determine effective path blocking for this blocker position
+      const path1Blocked = blockerSquare === blockSquare && path1BlockProb > 0;
+      const path2Blocked = blockerSquare === blockSquare && path2BlockProb > 0;
+      
+      if (!path1Blocked && !path2Blocked) {
+        // Both paths clear: Full split
+        const positions1 = new Map<string, SquareIndex>();
+        positions1.set(movingPieceId, target1);
+        positions1.set(blockingPieceId, blockerSquare);
+        jointStates[createJointKey(positions1)] = splitRatio * blockerProb;
+        
+        const positions2 = new Map<string, SquareIndex>();
+        positions2.set(movingPieceId, target2);
+        positions2.set(blockingPieceId, blockerSquare);
+        jointStates[createJointKey(positions2)] = (1 - splitRatio) * blockerProb;
+      } else if (path1Blocked && !path2Blocked) {
+        // Path 1 blocked, path 2 clear: iSwap to target2
+        const positions = new Map<string, SquareIndex>();
+        positions.set(movingPieceId, target2);
+        positions.set(blockingPieceId, blockerSquare);
+        jointStates[createJointKey(positions)] = blockerProb;
+      } else if (!path1Blocked && path2Blocked) {
+        // Path 1 clear, path 2 blocked: iSwap to target1
         const positions = new Map<string, SquareIndex>();
         positions.set(movingPieceId, target1);
-        positions.set(blockingPieceId, square);
-        const key = createJointKey(positions);
-        jointStates[key] = success1Prob * prob / (1 - blockProb);
+        positions.set(blockingPieceId, blockerSquare);
+        jointStates[createJointKey(positions)] = blockerProb;
+      } else {
+        // Both paths blocked: Identity (stay at source)
+        const positions = new Map<string, SquareIndex>();
+        positions.set(movingPieceId, sourceSquare);
+        positions.set(blockingPieceId, blockerSquare);
+        jointStates[createJointKey(positions)] = blockerProb;
       }
     }
   }
   
-  // Branch 2: Target 2 succeeds (if different blocker or clear)
-  const success2Prob = split2; // Assuming target2 path is clear for now
-  if (success2Prob > 0) {
-    for (const [sq, prob] of Object.entries(blockingPiece.superposition)) {
-      const square = parseInt(sq);
-      const positions = new Map<string, SquareIndex>();
-      positions.set(movingPieceId, target2);
-      positions.set(blockingPieceId, square);
-      const key = createJointKey(positions);
-      jointStates[key] = (jointStates[key] || 0) + success2Prob * prob;
-    }
-  }
-  
-  // Branch 3: Blocked - stays at source
-  const blockedProb = blockProb * split1;
-  if (blockedProb > 0) {
-    const positions = new Map<string, SquareIndex>();
-    positions.set(movingPieceId, sourceSquare);
-    positions.set(blockingPieceId, blockSquare);
-    const key = createJointKey(positions);
-    jointStates[key] = blockedProb;
-  }
-  
   const entanglement: Entanglement = {
-    pieceIds: [movingPieceId, blockingPieceId],
+    pieceIds: Array.from(involvedPieces),
     jointStates,
-    description: `${movingPiece.type} splitting through ${blockingPiece.type}`,
+    description: `${movingPiece.type} splitting with path entanglement`,
   };
   
   newBoard.entanglements = [...(board.entanglements || []), entanglement];
@@ -202,6 +242,8 @@ export function updatePiecesFromEntanglement(
   entanglement: Entanglement
 ): BoardState {
   let newBoard = cloneBoardState(board);
+  
+  console.log('Updating pieces from entanglement:', entanglement);
   
   // Calculate marginal probabilities for each piece from joint distribution
   const pieceProbabilities = new Map<string, SuperpositionState>();
@@ -220,8 +262,11 @@ export function updatePiecesFromEntanglement(
     }
   }
   
+  console.log('Calculated marginal probabilities:', Array.from(pieceProbabilities.entries()));
+  
   // Update each piece's superposition
   for (const [pieceId, superposition] of pieceProbabilities.entries()) {
+    console.log(`Updating piece ${pieceId} with superposition:`, superposition);
     newBoard = updatePieceSuperposition(newBoard, pieceId, superposition);
   }
   

@@ -706,7 +706,7 @@ function executeNormalMove(board: BoardState, move: NormalMove): BoardState {
     newBoard = setEnPassantTarget(newBoard, {
       square: epSquare,
       pawnSquare: move.to,
-      pawnId: updatedPiece.id,
+      pawnId: finalPiece.id,
     });
   } else {
     newBoard = setEnPassantTarget(newBoard, null);
@@ -859,9 +859,26 @@ function executeSplitMove(board: BoardState, move: SplitMove): BoardState {
   
   // If there are blockers in either path, create 3-way entanglement
   if (blockers1.length > 0 || blockers2.length > 0) {
-    // Handle first blocker from each path
-    const blocker1 = blockers1.length > 0 ? blockers1[0] : null;
-    const blocker2 = blockers2.length > 0 ? blockers2[0] : null;
+    // Collect blocker data for the function call
+    const blockingPieceIds: string[] = [];
+    const blockSquares: SquareIndex[] = [];
+    const blockProbabilities: number[] = [];
+    
+    // Add blocker from path 1 if exists
+    if (blockers1.length > 0) {
+      blockingPieceIds.push(blockers1[0].pieceId);
+      blockSquares.push(blockers1[0].square);
+      blockProbabilities.push(blockers1[0].probability);
+    }
+    
+    // Add blocker from path 2 if exists
+    if (blockers2.length > 0) {
+      blockingPieceIds.push(blockers2[0].pieceId);
+      blockSquares.push(blockers2[0].square);
+      blockProbabilities.push(blockers2[0].probability);
+    }
+    
+    console.log('Creating split entanglement with blockers:', blockingPieceIds);
     
     const result = createSplitEntanglement(
       newBoard,
@@ -869,16 +886,22 @@ function executeSplitMove(board: BoardState, move: SplitMove): BoardState {
       move.from,
       move.to1,
       move.to2,
-      blocker1 ? { pieceId: blocker1.pieceId, square: blocker1.square, probability: blocker1.probability } : null,
-      blocker2 ? { pieceId: blocker2.pieceId, square: blocker2.square, probability: blocker2.probability } : null,
+      blockingPieceIds,
+      blockSquares,
+      blockProbabilities,
       move.probability || 0.5
     );
     
-    newBoard = result.board;
+    console.log('Split entanglement result:', result.entanglement);
     
-    // Update all pieces involved in entanglement
     if (result.entanglement) {
+      // Update board from entanglement first
+      newBoard = result.board;
+      // Then update piece probabilities from joint distribution
       newBoard = updatePiecesFromEntanglement(newBoard, result.entanglement);
+      console.log('Updated board after entanglement:', newBoard.pieces.find(p => p.id === move.pieceId));
+    } else {
+      newBoard = result.board;
     }
   } else {
     // No blockers - standard quantum split

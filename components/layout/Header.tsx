@@ -9,7 +9,7 @@ export function Header() {
 
   return (
     <header className="border-b border-border bg-card">
-      <div className="container mx-auto px-4 py-2">
+      <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           {/* Logo and Title */}
           <div className="flex items-center gap-2">
@@ -18,9 +18,6 @@ export function Header() {
             </div>
             <div>
               <h1 className="text-xl font-bold">Quantum Chess</h1>
-              <p className="text-xs text-muted-foreground">
-                Superposition • Entanglement • Measurement
-              </p>
             </div>
           </div>
 
