@@ -144,6 +144,14 @@ export function isSquareCertainlyOccupied(board: BoardState, square: SquareIndex
 }
 
 /**
+ * Check if a square has superpositioned pieces (0 < probability < 1)
+ */
+export function hasSuperpositionedPiece(board: BoardState, square: SquareIndex): boolean {
+  const prob = getSquareOccupancyProbability(board, square);
+  return prob > 0 && prob < 1;
+}
+
+/**
  * Get piece by ID
  */
 export function getPieceById(board: BoardState, pieceId: string): QuantumPiece | null {

@@ -161,16 +161,20 @@ function generateNormalMoves(
       // Check if path is clear for sliding pieces
       if (isSlidingMove(piece.type, fromSquare, target)) {
         const pathSquares = getSquaresBetween(fromSquare, target);
-        let pathClear = true;
+        let pathBlocked = false;
         
+        // Only block if square is CERTAINLY occupied (probability = 1.0)
+        // Superpositioned pieces (0 < prob < 1) will create entanglement instead
         for (const sq of pathSquares) {
-          if (!isSquareCertainlyEmpty(board, sq)) {
-            pathClear = false;
+          const certainPiece = getPieceAt(board, sq);
+          if (certainPiece) {
+            // Square is certainly occupied - path blocked
+            pathBlocked = true;
             break;
           }
         }
         
-        if (!pathClear) continue;
+        if (pathBlocked) continue;
       }
       
       // Check target square
@@ -296,15 +300,15 @@ function generateMergeMoves(
         // Target must be empty (merge cannot capture)
         if (!isSquareCertainlyEmpty(board, target)) continue;
         
-        // Check paths for sliding pieces
+        // Check paths are not certainly blocked (allow superposition - will create entanglement)
         if (isSlidingMove(piece.type, from1, target)) {
           const path1 = getSquaresBetween(from1, target);
-          if (path1.some(sq => !isSquareCertainlyEmpty(board, sq))) continue;
+          if (path1.some(sq => getPieceAt(board, sq) !== null)) continue;
         }
         
         if (isSlidingMove(piece.type, from2, target)) {
           const path2 = getSquaresBetween(from2, target);
-          if (path2.some(sq => !isSquareCertainlyEmpty(board, sq))) continue;
+          if (path2.some(sq => getPieceAt(board, sq) !== null)) continue;
         }
         
         moves.push({
@@ -473,15 +477,14 @@ function validateNormalMove(
   if (isSlidingMove(piece.type, move.from, move.to)) {
     const pathSquares = getSquaresBetween(move.from, move.to);
     for (const sq of pathSquares) {
-      if (!isSquareCertainlyEmpty(board, sq)) {
-        // Path is blocked - need to check if it's certain or requires measurement
-        const occupancyProb = board.pieces.reduce((sum, p) => sum + (p.superposition[sq] || 0), 0);
-        if (occupancyProb > 0) {
-          return {
-            isLegal: false,
-            reason: 'Path is blocked',
-          };
-        }
+      // Only block if square is CERTAINLY occupied (prob = 1.0)
+      // Superpositioned pieces (0 < prob < 1) will create entanglement
+      const certainPiece = getPieceAt(board, sq);
+      if (certainPiece) {
+        return {
+          isLegal: false,
+          reason: 'Path is certainly blocked',
+        };
       }
     }
   }
@@ -566,23 +569,26 @@ function validateSplitMove(
     };
   }
   
-  // For sliding pieces, check paths are clear
+  // For sliding pieces, check paths are not CERTAINLY blocked
+  // Superpositioned pieces will create entanglement instead
   if (isSlidingMove(piece.type, move.from, move.to1)) {
     const path1 = getSquaresBetween(move.from, move.to1);
-    if (path1.some(sq => !isSquareCertainlyEmpty(board, sq))) {
+    const blocked1 = path1.some(sq => getPieceAt(board, sq) !== null);
+    if (blocked1) {
       return {
         isLegal: false,
-        reason: 'Path to target 1 is blocked',
+        reason: 'Path to target 1 is certainly blocked',
       };
     }
   }
   
   if (isSlidingMove(piece.type, move.from, move.to2)) {
     const path2 = getSquaresBetween(move.from, move.to2);
-    if (path2.some(sq => !isSquareCertainlyEmpty(board, sq))) {
+    const blocked2 = path2.some(sq => getPieceAt(board, sq) !== null);
+    if (blocked2) {
       return {
         isLegal: false,
-        reason: 'Path to target 2 is blocked',
+        reason: 'Path to target 2 is certainly blocked',
       };
     }
   }

@@ -92,11 +92,22 @@ export interface QuantumPiece {
 }
 
 /**
+ * Joint state for entangled pieces
+ * Maps piece positions to joint probability
+ * Example: {"piece1:e4,piece2:d5": 0.6, "piece1:e2,piece2:d5": 0.4}
+ */
+export interface JointState {
+  [jointKey: string]: number; // "pieceId:square,pieceId:square" -> probability
+}
+
+/**
  * Entanglement relationship between pieces
  * When pieces are entangled, measuring one affects the other
+ * Stores joint probability distribution, not independent probabilities
  */
 export interface Entanglement {
   pieceIds: PieceId[]; // pieces that are entangled
+  jointStates: JointState; // joint probability distribution
   description: string; // human-readable description of the entanglement
 }
 

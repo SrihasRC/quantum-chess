@@ -19,7 +19,11 @@ import {
   getPieceById,
   updatePieceSuperposition,
   cloneBoardState,
+  getPiecesAtSquare,
 } from './state';
+import {
+  getSquaresBetween,
+} from './utils';
 
 // Split Move - Create Superposition
 
@@ -59,6 +63,141 @@ export function splitMove(
   
   newSuperposition[toSquare1] = (newSuperposition[toSquare1] || 0) + prob1;
   newSuperposition[toSquare2] = (newSuperposition[toSquare2] || 0) + prob2;
+  
+  return normalizeProbabilities(newSuperposition);
+}
+
+// Merge Move - Combine Superposition
+
+/**
+ * Calculate probability that a path is blocked by superpositioned pieces
+ * Returns 0 if certainly clear, >0 if has blocking pieces
+ */
+export function getPathBlockingProbability(
+  board: BoardState,
+  pathSquares: SquareIndex[],
+  movingPieceId: string
+): number {
+  let blockProb = 0;
+  
+  for (const square of pathSquares) {
+    // Get all pieces at this square (except the moving piece)
+    const pieces = getPiecesAtSquare(board, square);
+    for (const piece of pieces) {
+      if (piece.id !== movingPieceId) {
+        const prob = piece.superposition[square] || 0;
+        // Accumulate blocking probability (approximate - not exact joint probability)
+        blockProb = Math.min(1, blockProb + prob);
+      }
+    }
+  }
+  
+  return blockProb;
+}
+
+/**
+ * Classical move through superposition - creates entangled superposition
+ * Piece ends up at target with prob (1-blockProb) and stays at source with prob blockProb
+ */
+export function entangledMove(
+  piece: QuantumPiece,
+  fromSquare: SquareIndex,
+  toSquare: SquareIndex,
+  blockProbability: number
+): SuperpositionState {
+  const sourceProb = piece.superposition[fromSquare] || 0;
+  
+  if (sourceProb === 0) {
+    throw new Error('Cannot move piece from square where it has no probability');
+  }
+  
+  // Create new superposition
+  const newSuperposition: SuperpositionState = { ...piece.superposition };
+  
+  // Remove original probability from source
+  delete newSuperposition[fromSquare];
+  
+  if (blockProbability > 0 && blockProbability < 1) {
+    // Path has superposition - piece ends up in superposition
+    const moveSuccessProb = sourceProb * (1 - blockProbability);
+    const moveBlockedProb = sourceProb * blockProbability;
+    
+    // Piece at target (move succeeded)
+    newSuperposition[toSquare] = (newSuperposition[toSquare] || 0) + moveSuccessProb;
+    
+    // Piece stays at source (move blocked)
+    newSuperposition[fromSquare] = (newSuperposition[fromSquare] || 0) + moveBlockedProb;
+  } else if (blockProbability === 0) {
+    // Path certainly clear - normal move
+    newSuperposition[toSquare] = (newSuperposition[toSquare] || 0) + sourceProb;
+  } else {
+    // Path certainly blocked - piece stays at source
+    newSuperposition[fromSquare] = (newSuperposition[fromSquare] || 0) + sourceProb;
+  }
+  
+  return normalizeProbabilities(newSuperposition);
+}
+
+/**
+ * Split move through superposition - can create 3-way split
+ * If path to one target is blocked with prob p:
+ * - Source: sourceProb * p (blocked)
+ * - Target1: sourceProb * (1-p) * split1 (succeeded)
+ * - Target2: sourceProb * split2 (if clear) or sourceProb * (1-p) * split2 (if path2 blocked)
+ */
+export function entangledSplitMove(
+  piece: QuantumPiece,
+  fromSquare: SquareIndex,
+  toSquare1: SquareIndex,
+  toSquare2: SquareIndex,
+  blockProb1: number,
+  blockProb2: number,
+  probability1: number = 0.5
+): SuperpositionState {
+  const sourceProb = piece.superposition[fromSquare] || 0;
+  
+  if (sourceProb === 0) {
+    throw new Error('Cannot split piece from square where it has no probability');
+  }
+  
+  if (probability1 <= 0 || probability1 >= 1) {
+    throw new Error('Split probability must be between 0 and 1');
+  }
+  
+  const newSuperposition: SuperpositionState = { ...piece.superposition };
+  
+  // Remove probability from source
+  delete newSuperposition[fromSquare];
+  
+  // Calculate probabilities for each outcome
+  const split1 = probability1;
+  const split2 = 1 - probability1;
+  
+  // Probability that path1 succeeds
+  const path1Success = 1 - blockProb1;
+  // Probability that path2 succeeds  
+  const path2Success = 1 - blockProb2;
+  
+  // Target 1: gets split1 fraction when path1 is clear
+  const prob1 = sourceProb * split1 * path1Success;
+  if (prob1 > 0) {
+    newSuperposition[toSquare1] = (newSuperposition[toSquare1] || 0) + prob1;
+  }
+  
+  // Target 2: gets split2 fraction when path2 is clear
+  const prob2 = sourceProb * split2 * path2Success;
+  if (prob2 > 0) {
+    newSuperposition[toSquare2] = (newSuperposition[toSquare2] || 0) + prob2;
+  }
+  
+  // Source: gets blocked probability from both paths
+  const blockedProb1 = sourceProb * split1 * blockProb1;
+  const blockedProb2 = sourceProb * split2 * blockProb2;
+  const totalBlocked = blockedProb1 + blockedProb2;
+  
+  if (totalBlocked > 0) {
+    newSuperposition[fromSquare] = (newSuperposition[fromSquare] || 0) + totalBlocked;
+  }
   
   return normalizeProbabilities(newSuperposition);
 }
@@ -183,85 +322,10 @@ export function measurePieceOnBoard(
   return { board, measurement };
 }
 
-// Entanglement - Piece Dependencies
+// Export entanglement functions from separate module
+export * from './entanglement';
 
-/** Create entanglement between pieces */
-export function entangleSquares(
-  board: BoardState,
-  pieceIds: string[],
-  description: string
-): BoardState {
-  const newBoard = cloneBoardState(board);
-  
-  const entanglement: Entanglement = {
-    pieceIds,
-    description,
-  };
-  
-  newBoard.entanglements = [...(board.entanglements || []), entanglement];
-  
-  return newBoard;
-}
-
-/**
- * Check if two pieces are entangled
- */
-export function arePiecesEntangled(
-  board: BoardState,
-  pieceId1: string,
-  pieceId2: string
-): boolean {
-  if (!board.entanglements) return false;
-  
-  return board.entanglements.some((e: Entanglement) => 
-    e.pieceIds.includes(pieceId1) && e.pieceIds.includes(pieceId2)
-  );
-}
-
-/**
- * Get all pieces entangled with a given piece
- */
-export function getEntangledPieces(
-  board: BoardState,
-  pieceId: string
-): string[] {
-  if (!board.entanglements) return [];
-  
-  const entangledIds = new Set<string>();
-  
-  for (const entanglement of board.entanglements) {
-    if (entanglement.pieceIds.includes(pieceId)) {
-      entanglement.pieceIds.forEach((id: string) => {
-        if (id !== pieceId) {
-          entangledIds.add(id);
-        }
-      });
-    }
-  }
-  
-  return Array.from(entangledIds);
-}
-
-/**
- * Remove entanglements involving a specific piece
- * Called when piece is captured or fully collapsed
- */
-export function removeEntanglement(
-  board: BoardState,
-  pieceId: string
-): BoardState {
-  const newBoard = cloneBoardState(board);
-  
-  if (!newBoard.entanglements) return newBoard;
-  
-  newBoard.entanglements = newBoard.entanglements.filter((e: Entanglement) => 
-    !e.pieceIds.includes(pieceId)
-  );
-  
-  return newBoard;
-}
-
-// Probability Helpers
+// Classical Move
 
 /** Calculate probability that path is clear */
 export function calculatePathClearProbability(
