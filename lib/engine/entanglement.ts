@@ -175,8 +175,8 @@ export function createSplitEntanglement(
   }
   
   // Apply Split Slide Unitary logic based on path blocking
-  // For simplicity with single blocker, enumerate the blocker's positions
   if (blockingPieceIds.length === 1) {
+    // Single blocker - enumerate all its positions
     const blockingPieceId = blockingPieceIds[0];
     const blockingPiece = getPieceById(board, blockingPieceId);
     if (!blockingPiece) throw new Error('Blocking piece not found');
@@ -218,6 +218,61 @@ export function createSplitEntanglement(
         positions.set(movingPieceId, sourceSquare);
         positions.set(blockingPieceId, blockerSquare);
         jointStates[createJointKey(positions)] = blockerProb;
+      }
+    }
+  } else if (blockingPieceIds.length === 2) {
+    // Two blockers - one per path
+    const blocker1Id = blockingPieceIds[0];
+    const blocker2Id = blockingPieceIds[1];
+    const blocker1 = getPieceById(board, blocker1Id);
+    const blocker2 = getPieceById(board, blocker2Id);
+    if (!blocker1 || !blocker2) throw new Error('Blocking piece not found');
+    
+    // Enumerate all combinations of blocker positions
+    for (const [sq1, prob1] of Object.entries(blocker1.superposition)) {
+      const blocker1Square = parseInt(sq1);
+      const path1Blocked = blocker1Square === blockSquares[0];
+      
+      for (const [sq2, prob2] of Object.entries(blocker2.superposition)) {
+        const blocker2Square = parseInt(sq2);
+        const path2Blocked = blocker2Square === blockSquares[1];
+        const combinedProb = prob1 * prob2;
+        
+        if (!path1Blocked && !path2Blocked) {
+          // Both paths clear: Full split
+          const positions1 = new Map<string, SquareIndex>();
+          positions1.set(movingPieceId, target1);
+          positions1.set(blocker1Id, blocker1Square);
+          positions1.set(blocker2Id, blocker2Square);
+          jointStates[createJointKey(positions1)] = splitRatio * combinedProb;
+          
+          const positions2 = new Map<string, SquareIndex>();
+          positions2.set(movingPieceId, target2);
+          positions2.set(blocker1Id, blocker1Square);
+          positions2.set(blocker2Id, blocker2Square);
+          jointStates[createJointKey(positions2)] = (1 - splitRatio) * combinedProb;
+        } else if (path1Blocked && !path2Blocked) {
+          // Path 1 blocked, path 2 clear: iSwap to target2
+          const positions = new Map<string, SquareIndex>();
+          positions.set(movingPieceId, target2);
+          positions.set(blocker1Id, blocker1Square);
+          positions.set(blocker2Id, blocker2Square);
+          jointStates[createJointKey(positions)] = combinedProb;
+        } else if (!path1Blocked && path2Blocked) {
+          // Path 1 clear, path 2 blocked: iSwap to target1
+          const positions = new Map<string, SquareIndex>();
+          positions.set(movingPieceId, target1);
+          positions.set(blocker1Id, blocker1Square);
+          positions.set(blocker2Id, blocker2Square);
+          jointStates[createJointKey(positions)] = combinedProb;
+        } else {
+          // Both paths blocked: Identity (stay at source)
+          const positions = new Map<string, SquareIndex>();
+          positions.set(movingPieceId, sourceSquare);
+          positions.set(blocker1Id, blocker1Square);
+          positions.set(blocker2Id, blocker2Square);
+          jointStates[createJointKey(positions)] = combinedProb;
+        }
       }
     }
   }

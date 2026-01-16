@@ -197,92 +197,57 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (validation.requiresMeasurement && validation.measurementSquare !== undefined) {
       let currentBoard = state.board;
       
-      // For captures, we might need to measure both attacker and target
+      // For captures, we need to measure the target piece
       if (move.type === 'capture') {
-        const piece = getPieceById(currentBoard, move.pieceId);
-        
-        // Measure attacker if in superposition at source
-        if (piece && piece.superposition[move.from] !== 1.0) {
-          // Check if piece is entangled
-          if (isPieceEntangled(currentBoard, move.pieceId)) {
-            const { board: newBoard } = collapseEntangledMeasurement(
-              currentBoard,
-              move.pieceId,
-              move.from
-            );
-            
-            // Check if piece collapsed to the source square
-            const measuredPiece = getPieceById(newBoard, move.pieceId);
-            if (!measuredPiece || measuredPiece.superposition[move.from] !== 1.0) {
-              console.log('Measurement failed - attacker not at source square');
-              toast.error('Measurement Failed', {
-                description: `Your piece was not found at ${indexToAlgebraic(move.from)}. Turn lost.`,
-              });
-              // Switch turn since measurement counts as the move
-              const finalBoard = switchTurn(newBoard);
-              set({ 
-                board: finalBoard,
-                selectedSquare: null,
-                legalMoves: [],
-              });
-              return;
-            }
-            currentBoard = newBoard;
-          } else {
-            // Not entangled - use regular measurement
-            const { board: newBoard, measurement } = measurePieceOnBoard(
-              currentBoard,
-              move.pieceId,
-              move.from
-            );
-            
-            if (!measurement.result) {
-              console.log('Measurement failed - attacker not at source square');
-              toast.error('Measurement Failed', {
-                description: `Your piece was not found at ${indexToAlgebraic(move.from)}. Turn lost.`,
-              });
-              // Switch turn since measurement counts as the move
-              const finalBoard = switchTurn(newBoard);
-              set({ 
-                board: finalBoard,
-                selectedSquare: null,
-                legalMoves: [],
-              });
-              return;
-            }
-            currentBoard = newBoard;
-          }
-        }
+        // Note: We do NOT measure the attacker even if in superposition
+        // Normal moves from superposition should create entanglement, not require measurement
         
         // Measure target if in superposition
         if (move.capturedPieceId) {
           const targetPiece = getPieceById(currentBoard, move.capturedPieceId);
           if (targetPiece && targetPiece.superposition[move.to] !== 1.0) {
-            // Check if target is entangled
-            if (isPieceEntangled(currentBoard, move.capturedPieceId)) {
-              const { board: newBoard } = collapseEntangledMeasurement(
-                currentBoard,
-                move.capturedPieceId,
-                move.to
-              );
+            // Perform PARTIAL measurement - check if piece is at capture square
+            // Use weighted random to determine outcome based on probability
+            const probAtTarget = targetPiece.superposition[move.to] || 0;
+            const measurementSuccess = Math.random() < probAtTarget;
+            
+            if (!measurementSuccess) {
+              // Measurement failed - piece not at target square
+              console.log('Measurement failed - target not at capture square');
+              toast.info('Capture Failed', {
+                description: `Target piece was not found at ${indexToAlgebraic(move.to)}. Moving to empty square.`,
+              });
               
-              // Check if target collapsed to the capture square
-              const measuredTarget = getPieceById(newBoard, move.capturedPieceId);
-              if (!measuredTarget || measuredTarget.superposition[move.to] !== 1.0) {
-                console.log('Measurement failed - target not at capture square');
-                toast.info('Capture Failed', {
-                  description: `Target piece was not found at ${indexToAlgebraic(move.to)}. Moving to empty square.`,
-                });
-                
-                // Target not there, but square is now empty - execute as normal move
-                const moveAsNormal: NormalMove = {
-                  type: 'normal',
-                  pieceId: move.pieceId,
-                  from: move.from,
+              // Partial measurement: Remove probability from measured square and renormalize
+              const newSuperposition: Record<number, number> = {};
+              for (const [square, prob] of Object.entries(targetPiece.superposition)) {
+                const sq = parseInt(square);
+                if (sq !== move.to) {
+                  newSuperposition[sq] = prob;
+                }
+              }
+              
+              // Renormalize remaining probabilities
+              const totalProb = Object.values(newSuperposition).reduce((sum, p) => sum + p, 0);
+              if (totalProb > 0) {
+                for (const square in newSuperposition) {
+                  newSuperposition[square] = newSuperposition[square] / totalProb;
+                }
+                currentBoard = updatePieceSuperposition(currentBoard, move.capturedPieceId, newSuperposition);
+              } else {
+                // All probability exhausted - remove piece
+                currentBoard = removePiece(currentBoard, move.capturedPieceId);
+              }
+              
+              // Target not there - execute as normal move
+              const moveAsNormal: NormalMove = {
+                type: 'normal',
+                pieceId: move.pieceId,
+                from: move.from,
                 to: move.to,
               };
               
-              const finalBoard = executeNormalMove(newBoard, moveAsNormal);
+              const finalBoard = executeNormalMove(currentBoard, moveAsNormal);
               const notation = formatMoveSimple(move.from, move.to, getPieceById(finalBoard, move.pieceId)!.type);
               
               // Switch turn and update state
@@ -301,105 +266,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 ],
               });
               return;
-              }
-              currentBoard = newBoard;
-            } else {
-              // Not entangled - use regular measurement
-              const { board: newBoard, measurement } = measurePieceOnBoard(
-                currentBoard,
-                move.capturedPieceId,
-                move.to
-              );
-              
-              if (!measurement.result) {
-                console.log('Measurement failed - target not at capture square');
-                toast.info('Capture Failed', {
-                  description: `Target piece was not found at ${indexToAlgebraic(move.to)}. Moving to empty square.`,
-                });
-                
-                // Target not there, but square is now empty - execute as normal move
-                const moveAsNormal: NormalMove = {
-                  type: 'normal',
-                  pieceId: move.pieceId,
-                  from: move.from,
-                  to: move.to,
-                };
-                
-                const finalBoard = executeNormalMove(newBoard, moveAsNormal);
-                const notation = formatMoveSimple(move.from, move.to, getPieceById(finalBoard, move.pieceId)!.type);
-                
-                // Switch turn and update state
-                const nextBoard = switchTurn(finalBoard);
-                set({ 
-                  board: nextBoard,
-                  selectedSquare: null,
-                  legalMoves: [],
-                  moveHistory: [
-                    ...state.moveHistory,
-                    {
-                      move: moveAsNormal,
-                      notation,
-                      timestamp: Date.now(),
-                    },
-                  ],
-                });
-                return;
-              }
-            
-              currentBoard = newBoard;
             }
+            
+            // Measurement succeeded - collapse piece to target square
+            currentBoard = updatePieceSuperposition(currentBoard, move.capturedPieceId, { [move.to]: 1.0 });
           }
-        }
-      } else {
-        // Non-capture measurement (attacker in superposition)
-        if (isPieceEntangled(currentBoard, move.pieceId)) {
-          const { board: newBoard } = collapseEntangledMeasurement(
-            currentBoard,
-            move.pieceId,
-            validation.measurementSquare
-          );
-          
-          // Check if piece collapsed to the measurement square
-          const measuredPiece = getPieceById(newBoard, move.pieceId);
-          if (!measuredPiece || measuredPiece.superposition[validation.measurementSquare] !== 1.0) {
-            console.log('Measurement failed - piece not at source square');
-            toast.error('Measurement Failed', {
-              description: `Your piece was not found at ${indexToAlgebraic(validation.measurementSquare)}. Turn lost.`,
-            });
-            // Switch turn since measurement counts as the move
-            const finalBoard = switchTurn(newBoard);
-            set({ 
-              board: finalBoard,
-              selectedSquare: null,
-              legalMoves: [],
-            });
-            return;
-          }
-          currentBoard = newBoard;
-        } else {
-          // Not entangled - use regular measurement
-          const { board: newBoard, measurement } = measurePieceOnBoard(
-            currentBoard,
-            move.pieceId,
-            validation.measurementSquare
-          );
-          
-          if (!measurement.result) {
-            console.log('Measurement failed - piece not at source square');
-            toast.error('Measurement Failed', {
-              description: `Your piece was not found at ${indexToAlgebraic(validation.measurementSquare)}. Turn lost.`,
-            });
-            // Switch turn since measurement counts as the move
-            const finalBoard = switchTurn(newBoard);
-            set({ 
-              board: finalBoard,
-              selectedSquare: null,
-              legalMoves: [],
-            });
-            return;
-          }
-          
-          currentBoard = newBoard;
         }
       }
       

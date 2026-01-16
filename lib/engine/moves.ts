@@ -464,14 +464,8 @@ function validateNormalMove(
 ): MoveValidationResult {
   const piece = getPieceById(board, move.pieceId)!;
   
-  // If piece is in superposition at source, flag for measurement but allow the move
-  if (piece.superposition[move.from] !== 1.0) {
-    return {
-      isLegal: true,
-      requiresMeasurement: true,
-      measurementSquare: move.from,
-    };
-  }
+  // For normal moves, superposition is allowed - entanglement will be created if needed
+  // Measurement is only required for CAPTURES, not normal moves
   
   // For sliding pieces, check if path is clear
   if (isSlidingMove(piece.type, move.from, move.to)) {
