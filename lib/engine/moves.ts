@@ -647,11 +647,13 @@ function validateMergeMove(
     };
   }
   
-  // Target must be empty
-  if (!isSquareCertainlyEmpty(board, move.to)) {
+  // Target must be empty OR contain the same piece (per paper's possibility equation)
+  const targetPieces = getPiecesAtSquare(board, move.to).filter(p => p.id !== piece.id);
+  
+  if (targetPieces.length > 0) {
     return {
       isLegal: false,
-      reason: 'Merge target must be empty',
+      reason: 'Merge target is occupied by another piece',
     };
   }
   

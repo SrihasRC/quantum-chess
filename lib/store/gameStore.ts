@@ -165,6 +165,36 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return;
     }
     
+    // Check if this is the same piece at a different superposition location
+    if (state.selectedSquare !== null) {
+      const selectedPiece = getPieceAt(state.board, state.selectedSquare);
+      let selectedPieceId = selectedPiece?.id;
+      
+      // If no classical piece at selected square, check for superposed pieces
+      if (!selectedPiece) {
+        const superposedPieces = getPiecesAtSquare(state.board, state.selectedSquare);
+        const playerPieces = superposedPieces.filter(p => p.color === state.board.activeColor);
+        if (playerPieces.length > 0) {
+          selectedPieceId = playerPieces[0].id;
+        }
+      }
+      
+      // If clicking on the same piece at different location, treat as move destination
+      if (selectedPieceId === pieceAtSquare.id) {
+        const move = state.legalMoves.find(m => {
+          if (m.type === 'normal' || m.type === 'capture') {
+            return m.to === square;
+          }
+          return false;
+        });
+        
+        if (move) {
+          get().movePiece(move);
+          return;
+        }
+      }
+    }
+    
     // Generate legal moves for this piece
     const legalMoves = generateLegalMoves(state.board, pieceAtSquare.id, square);
     
