@@ -647,6 +647,48 @@ function validateMergeMove(
     };
   }
   
+  // Per paper: valid(t,s_1,v_{s_1}) ∧ valid(t,s_2,v_{s_2})
+  // Both source squares must be able to reach the target
+  const validTargets1 = getPieceTargetSquares(piece.type, move.from1, piece.color);
+  const validTargets2 = getPieceTargetSquares(piece.type, move.from2, piece.color);
+  
+  if (!validTargets1.includes(move.to)) {
+    return {
+      isLegal: false,
+      reason: `Target ${indexToAlgebraic(move.to)} is not reachable from ${indexToAlgebraic(move.from1)}`,
+    };
+  }
+  
+  if (!validTargets2.includes(move.to)) {
+    return {
+      isLegal: false,
+      reason: `Target ${indexToAlgebraic(move.to)} is not reachable from ${indexToAlgebraic(move.from2)}`,
+    };
+  }
+  
+  // Check paths are clear for sliding pieces
+  if (isSlidingMove(piece.type, move.from1, move.to)) {
+    const path1 = getSquaresBetween(move.from1, move.to);
+    const blocked1 = path1.some(sq => getPieceAt(board, sq) !== null);
+    if (blocked1) {
+      return {
+        isLegal: false,
+        reason: `Path from ${indexToAlgebraic(move.from1)} to target is blocked`,
+      };
+    }
+  }
+  
+  if (isSlidingMove(piece.type, move.from2, move.to)) {
+    const path2 = getSquaresBetween(move.from2, move.to);
+    const blocked2 = path2.some(sq => getPieceAt(board, sq) !== null);
+    if (blocked2) {
+      return {
+        isLegal: false,
+        reason: `Path from ${indexToAlgebraic(move.from2)} to target is blocked`,
+      };
+    }
+  }
+  
   // Target must be empty OR contain the same piece (per paper's possibility equation)
   const targetPieces = getPiecesAtSquare(board, move.to).filter(p => p.id !== piece.id);
   
