@@ -37,6 +37,7 @@ import {
   splitMove as quantumSplit,
   mergeMove as quantumMerge,
   classicalMove,
+  moveProbability,
   measurePieceOnBoard,
   createMoveEntanglement,
   createSplitEntanglement,
@@ -197,10 +198,54 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (validation.requiresMeasurement && validation.measurementSquare !== undefined) {
       let currentBoard = state.board;
       
-      // For captures, we need to measure the target piece
+      // For captures, measure both attacker and target if in superposition
       if (move.type === 'capture') {
-        // Note: We do NOT measure the attacker even if in superposition
-        // Normal moves from superposition should create entanglement, not require measurement
+        const piece = getPieceById(currentBoard, move.pieceId);
+        
+        // Measure attacker if in superposition at source
+        if (piece && piece.superposition[move.from] !== 1.0) {
+          const probAtSource = piece.superposition[move.from] || 0;
+          const roll = Math.random();
+          
+          if (roll > probAtSource) {
+            // Measurement failed - attacker not at source square
+            console.log('Measurement failed - attacker not at source square');
+            toast.error('Measurement Failed', {
+              description: `Your piece was not found at ${indexToAlgebraic(move.from)} (${Math.round(probAtSource * 100)}% chance). Turn lost.`,
+            });
+            
+            // Remove probability from source and renormalize
+            const newSuperposition: Record<number, number> = {};
+            for (const [square, prob] of Object.entries(piece.superposition)) {
+              const sq = parseInt(square);
+              if (sq !== move.from) {
+                newSuperposition[sq] = prob;
+              }
+            }
+            
+            const totalProb = Object.values(newSuperposition).reduce((sum, p) => sum + p, 0);
+            if (totalProb > 0) {
+              for (const square in newSuperposition) {
+                newSuperposition[square] = newSuperposition[square] / totalProb;
+              }
+              currentBoard = updatePieceSuperposition(currentBoard, move.pieceId, newSuperposition);
+            } else {
+              currentBoard = removePiece(currentBoard, move.pieceId);
+            }
+            
+            // Switch turn since measurement counts as the move
+            const finalBoard = switchTurn(currentBoard);
+            set({ 
+              board: finalBoard,
+              selectedSquare: null,
+              legalMoves: [],
+            });
+            return;
+          }
+          
+          // Measurement succeeded - collapse attacker to source
+          currentBoard = updatePieceSuperposition(currentBoard, move.pieceId, { [move.from]: 1.0 });
+        }
         
         // Measure target if in superposition
         if (move.capturedPieceId) {
@@ -264,6 +309,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
                     timestamp: Date.now(),
                   },
                 ],
+                boardStateHistory: [...state.boardStateHistory, cloneBoardState(nextBoard)],
+                currentMoveIndex: state.moveHistory.length,
               });
               return;
             }
@@ -527,21 +574,21 @@ function executeNormalMove(board: BoardState, move: NormalMove): BoardState {
           newBoard = updatePiecesFromEntanglement(newBoard, result.entanglement);
         }
       } else {
-        // No blockers - classical move
+        // No blockers - move probability (maintain superposition)
         const updatedPiece = getPieceById(newBoard, move.pieceId);
         if (updatedPiece) {
-          const newSuperposition = classicalMove(updatedPiece, move.to);
+          const newSuperposition = moveProbability(updatedPiece, move.from, move.to);
           newBoard = updatePieceSuperposition(newBoard, move.pieceId, newSuperposition);
         }
       }
     } else {
-      // No path (adjacent move) - classical move
-      const newSuperposition = classicalMove(piece, move.to);
+      // No path (adjacent move) - move probability (maintain superposition)
+      const newSuperposition = moveProbability(piece, move.from, move.to);
       newBoard = updatePieceSuperposition(newBoard, move.pieceId, newSuperposition);
     }
   } else {
-    // Non-sliding piece - classical move
-    const newSuperposition = classicalMove(piece, move.to);
+    // Non-sliding piece - move probability (maintain superposition)
+    const newSuperposition = moveProbability(piece, move.from, move.to);
     newBoard = updatePieceSuperposition(newBoard, move.pieceId, newSuperposition);
   }
   
@@ -619,17 +666,17 @@ function executeCaptureMove(board: BoardState, move: NormalMove): BoardState {
           newBoard = updatePiecesFromEntanglement(newBoard, result.entanglement);
         }
       } else {
-        // No blockers - classical move to capture square
+        // No blockers - classical capture (collapse to capture square)
         const newSuperposition = classicalMove(piece, move.to);
         newBoard = updatePieceSuperposition(newBoard, move.pieceId, newSuperposition);
       }
     } else {
-      // No path - classical move to capture square
+      // No path - classical capture (collapse to capture square)
       const newSuperposition = classicalMove(piece, move.to);
       newBoard = updatePieceSuperposition(newBoard, move.pieceId, newSuperposition);
     }
   } else {
-    // Non-sliding piece - classical move to capture square
+    // Non-sliding piece - classical capture (collapse to capture square)
     const newSuperposition = classicalMove(piece, move.to);
     newBoard = updatePieceSuperposition(newBoard, move.pieceId, newSuperposition);
   }
@@ -801,36 +848,8 @@ function executeMergeMove(board: BoardState, move: MergeMove): BoardState {
   const piece = getPieceById(newBoard, move.pieceId);
   if (!piece) return newBoard;
   
-  // Check for path entanglement (if sliding piece)
-  if (isSlidingMove(piece.type, move.from1, move.to)) {
-    const path1 = getSquaresBetween(move.from1, move.to);
-    if (path1.length > 0) {
-      newBoard = createPathEntanglement(
-        newBoard,
-        move.pieceId,
-        path1,
-        `${piece.type} merge from ${indexToAlgebraic(move.from1)} through path to ${indexToAlgebraic(move.to)}`
-      );
-    }
-  }
-  
-  if (isSlidingMove(piece.type, move.from2, move.to)) {
-    const path2 = getSquaresBetween(move.from2, move.to);
-    if (path2.length > 0) {
-      newBoard = createPathEntanglement(
-        newBoard,
-        move.pieceId,
-        path2,
-        `${piece.type} merge from ${indexToAlgebraic(move.from2)} through path to ${indexToAlgebraic(move.to)}`
-      );
-    }
-  }
-  
-  // Merge superposition
-  const updatedPiece = getPieceById(newBoard, move.pieceId);
-  if (!updatedPiece) return newBoard;
-  
-  const newSuperposition = quantumMerge(updatedPiece, move.from1, move.from2, move.to);
+  // Merge superposition (no path entanglement for merge moves)
+  const newSuperposition = quantumMerge(piece, move.from1, move.from2, move.to);
   
   newBoard = updatePieceSuperposition(newBoard, move.pieceId, newSuperposition);
   

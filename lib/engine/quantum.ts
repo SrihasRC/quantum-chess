@@ -391,6 +391,35 @@ export function classicalMove(
 }
 
 /**
+ * Move probability from one square to another
+ * Used when a superpositioned piece moves from one square to an empty square
+ * Maintains superposition at other squares
+ */
+export function moveProbability(
+  piece: QuantumPiece,
+  fromSquare: SquareIndex,
+  toSquare: SquareIndex
+): SuperpositionState {
+  const newSuperposition: SuperpositionState = {};
+  const probAtSource = piece.superposition[fromSquare] || 0;
+  
+  // Copy all probabilities except from source
+  for (const [square, prob] of Object.entries(piece.superposition)) {
+    const sq = parseInt(square);
+    if (sq !== fromSquare) {
+      newSuperposition[sq] = prob;
+    }
+  }
+  
+  // Add the source probability to target
+  if (probAtSource > 0) {
+    newSuperposition[toSquare] = (newSuperposition[toSquare] || 0) + probAtSource;
+  }
+  
+  return newSuperposition;
+}
+
+/**
  * Update piece probability after partial removal
  * Used when one "copy" of a superposed piece is captured
  */
