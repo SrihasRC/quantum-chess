@@ -152,7 +152,13 @@ export default function SandboxPage() {
   const handleImportBoard = (json: string) => {
     try {
       const boardState = JSON.parse(json);
-      useGameStore.setState({ board: boardState });
+      // Reset history when importing to prevent undo issues
+      useGameStore.setState({ 
+        board: boardState,
+        boardStateHistory: [boardState],
+        moveHistory: [],
+        currentMoveIndex: -1,
+      });
       toast.success("Board state imported");
     } catch {
       toast.error("Invalid JSON");
