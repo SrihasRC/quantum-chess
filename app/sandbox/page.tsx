@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Header } from "@/components/layout/Header";
 import { Chessboard } from "@/components/board/Chessboard";
 import { MoveModSelector, type MoveMode } from "@/components/game/MoveModSelector";
+import ImportBoardDialog from "@/components/sandbox/ImportBoardDialog";
 import { Button } from "@/components/ui/button";
 import { useGameStore } from "@/lib/store/gameStore";
 import { createInitialBoardState, getPiecesAtSquare } from "@/lib/engine/state";
@@ -21,6 +22,7 @@ export default function SandboxPage() {
   const [moveMode, setMoveMode] = useState<MoveMode>('classic');
   const [flipped, setFlipped] = useState(false);
   const [deleteMode, setDeleteMode] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const undoMove = useGameStore((state) => state.undoMove);
 
   // Enable sandbox mode on mount
@@ -147,10 +149,7 @@ export default function SandboxPage() {
     toast.success("Board state copied to clipboard");
   };
 
-  const handleImportBoard = () => {
-    const json = prompt("Paste board state JSON:");
-    if (!json) return;
-
+  const handleImportBoard = (json: string) => {
     try {
       const boardState = JSON.parse(json);
       useGameStore.setState({ board: boardState });
@@ -323,7 +322,7 @@ export default function SandboxPage() {
             <Button onClick={handleExportBoard} variant="outline" size="sm" className="w-full hover:cursor-pointer hover:text-accent">
               Export JSON
             </Button>
-            <Button onClick={handleImportBoard} variant="outline" size="sm" className="w-full hover:cursor-pointer hover:text-accent">
+            <Button onClick={() => setImportDialogOpen(true)} variant="outline" size="sm" className="w-full hover:cursor-pointer hover:text-accent">
               Import JSON
             </Button>
             <div className="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded">
@@ -336,6 +335,12 @@ export default function SandboxPage() {
           </div>
         </div>
       </div>
+      
+      <ImportBoardDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        onImport={handleImportBoard}
+      />
     </div>
   );
 }
