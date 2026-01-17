@@ -226,6 +226,11 @@ export function cloneBoardState(board: BoardState): BoardState {
     enPassantTarget: board.enPassantTarget ? { ...board.enPassantTarget } : null,
     halfmoveClock: board.halfmoveClock,
     fullmoveNumber: board.fullmoveNumber,
+    entanglements: board.entanglements ? board.entanglements.map(e => ({
+      ...e,
+      pieceIds: [...e.pieceIds],
+      jointStates: { ...e.jointStates },
+    })) : undefined,
   };
 }
 

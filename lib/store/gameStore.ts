@@ -42,6 +42,9 @@ import {
   updatePiecesFromEntanglement,
   isPieceEntangled,
   removeEntanglement,
+  collapseEntanglements,
+  parseJointKey,
+  createJointKey,
 } from '@/lib/engine/quantum';
 import {
   indexToAlgebraic,
@@ -261,6 +264,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
               newSuperposition[square] = newSuperposition[square] / totalProb;
             }
             currentBoard = updatePieceSuperposition(currentBoard, move.pieceId, newSuperposition);
+            
+            // If piece collapsed to a single square, collapse entanglements
+            const squares = Object.keys(newSuperposition);
+            if (squares.length === 1) {
+              const collapsedSquare = parseInt(squares[0]);
+              console.log(`Piece ${move.pieceId} collapsed to square ${collapsedSquare}, collapsing entanglements...`);
+              currentBoard = collapseEntanglements(currentBoard, move.pieceId, collapsedSquare);
+              console.log('After collapse, board entanglements:', currentBoard.entanglements);
+              console.log('After collapse, all pieces:', currentBoard.pieces.map(p => ({ id: p.id, superposition: p.superposition })));
+            }
           } else {
             currentBoard = removePiece(currentBoard, move.pieceId);
           }
@@ -277,6 +290,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
         
         // Measurement succeeded - collapse attacker to 100% at source
         currentBoard = updatePieceSuperposition(currentBoard, move.pieceId, { [move.from]: 1.0 });
+        
+        // Collapse any entanglements involving the measured piece
+        currentBoard = collapseEntanglements(currentBoard, move.pieceId, move.from);
+        
         set({ board: currentBoard });
       }
       
@@ -317,6 +334,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 newSuperposition[square] = newSuperposition[square] / totalProb;
               }
               currentBoard = updatePieceSuperposition(currentBoard, move.capturedPieceId, newSuperposition);
+              
+              // If target piece collapsed to a single square, collapse entanglements
+              const squares = Object.keys(newSuperposition);
+              if (squares.length === 1) {
+                const collapsedSquare = parseInt(squares[0]);
+                currentBoard = collapseEntanglements(currentBoard, move.capturedPieceId, collapsedSquare);
+              }
             } else {
               currentBoard = removePiece(currentBoard, move.capturedPieceId);
             }
@@ -334,6 +358,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
           
           // Measurement succeeded - collapse target to capture square
           currentBoard = updatePieceSuperposition(currentBoard, move.capturedPieceId, { [move.to]: 1.0 });
+          
+          // Collapse any entanglements involving the measured target piece
+          currentBoard = collapseEntanglements(currentBoard, move.capturedPieceId, move.to);
+          
           set({ board: currentBoard });
         }
       }
@@ -570,6 +598,11 @@ function executeNormalMove(board: BoardState, move: NormalMove): BoardState {
       
       // If there are blocking pieces with superposition, create entanglement
       if (blockers.length > 0) {
+        // TODO: Edge case - if moving piece is ALREADY entangled, this creates multi-piece entanglement
+        if (isPieceEntangled(newBoard, move.pieceId)) {
+          console.warn('[executeNormalMove] Creating new entanglement while piece already entangled - multi-piece entanglement not fully supported');
+        }
+        
         // For simplicity, handle first blocker (multi-blocker is complex)
         const blocker = blockers[0];
         const result = createMoveEntanglement(
@@ -594,17 +627,32 @@ function executeNormalMove(board: BoardState, move: NormalMove): BoardState {
         if (updatedPiece) {
           const newSuperposition = moveProbability(updatedPiece, move.from, move.to);
           newBoard = updatePieceSuperposition(newBoard, move.pieceId, newSuperposition);
+          
+          // Update existing entanglements if piece was already entangled
+          if (isPieceEntangled(newBoard, move.pieceId)) {
+            newBoard = updateEntanglementsAfterMove(newBoard, move.pieceId, move.from, move.to);
+          }
         }
       }
     } else {
       // No path (adjacent move) - move probability (maintain superposition)
       const newSuperposition = moveProbability(piece, move.from, move.to);
       newBoard = updatePieceSuperposition(newBoard, move.pieceId, newSuperposition);
+      
+      // Update existing entanglements if piece was already entangled
+      if (isPieceEntangled(newBoard, move.pieceId)) {
+        newBoard = updateEntanglementsAfterMove(newBoard, move.pieceId, move.from, move.to);
+      }
     }
   } else {
     // Non-sliding piece - move probability (maintain superposition)
     const newSuperposition = moveProbability(piece, move.from, move.to);
     newBoard = updatePieceSuperposition(newBoard, move.pieceId, newSuperposition);
+    
+    // Update existing entanglements if piece was already entangled
+    if (isPieceEntangled(newBoard, move.pieceId)) {
+      newBoard = updateEntanglementsAfterMove(newBoard, move.pieceId, move.from, move.to);
+    }
   }
   
   // Get the piece again after all updates
@@ -664,6 +712,11 @@ function executeCaptureMove(board: BoardState, move: NormalMove): BoardState {
       const blockers = getBlockingPiecesInPath(newBoard, pathSquares, move.pieceId);
       
       if (blockers.length > 0) {
+        // TODO: Edge case - if moving piece is ALREADY entangled, this creates multi-piece entanglement
+        if (isPieceEntangled(newBoard, move.pieceId)) {
+          console.warn('[executeCaptureMove] Creating new entanglement while piece already entangled - multi-piece entanglement not fully supported');
+        }
+        
         const blocker = blockers[0];
         const result = createMoveEntanglement(
           newBoard,
@@ -715,8 +768,11 @@ function executeCaptureMove(board: BoardState, move: NormalMove): BoardState {
   if (move.capturedPieceId) {
     const capturedPiece = getPieceById(newBoard, move.capturedPieceId);
     if (capturedPiece) {
-      // Remove any entanglements involving captured piece
+      // TODO: Properly handle capture of entangled pieces
+      // For now, simply remove entanglements involving the captured piece
+      // A complete implementation would need to update remaining pieces' probabilities
       if (isPieceEntangled(newBoard, move.capturedPieceId)) {
+        console.warn('[executeCaptureMove] Capturing entangled piece - removing entanglement (simplified)');
         newBoard = removeEntanglement(newBoard, move.capturedPieceId);
       }
       
@@ -786,6 +842,13 @@ function executeSplitMove(board: BoardState, move: SplitMove): BoardState {
   const piece = getPieceById(newBoard, move.pieceId);
   if (!piece) return newBoard;
   
+  // Check if this piece is already entangled before splitting
+  const existingEntanglements = newBoard.entanglements?.filter(e => 
+    e.pieceIds.includes(move.pieceId)
+  ) || [];
+  
+  console.log(`[executeSplitMove] Piece ${move.pieceId} has ${existingEntanglements.length} existing entanglements`);
+  
   // Check for blocking pieces in paths
   let blockers1: { pieceId: string; square: SquareIndex; probability: number }[] = [];
   let blockers2: { pieceId: string; square: SquareIndex; probability: number }[] = [];
@@ -808,6 +871,11 @@ function executeSplitMove(board: BoardState, move: SplitMove): BoardState {
   
   // If there are blockers in either path, create 3-way entanglement
   if (blockers1.length > 0 || blockers2.length > 0) {
+    // TODO: Edge case - if splitting piece is ALREADY entangled, this creates multi-piece entanglement
+    if (isPieceEntangled(newBoard, move.pieceId)) {
+      console.warn('[executeSplitMove] Creating new entanglement while piece already entangled - multi-piece entanglement not fully supported');
+    }
+    
     // Collect blocker data for the function call
     const blockingPieceIds: string[] = [];
     const blockSquares: SquareIndex[] = [];
@@ -864,8 +932,151 @@ function executeSplitMove(board: BoardState, move: SplitMove): BoardState {
     newBoard = updatePieceSuperposition(newBoard, move.pieceId, newSuperposition);
   }
   
+  // Update existing entanglements if the piece was already entangled
+  if (existingEntanglements.length > 0) {
+    console.log('[executeSplitMove] Updating existing entanglements after split');
+    newBoard = updateEntanglementsAfterSplit(
+      newBoard,
+      move.pieceId,
+      move.from,
+      move.to1,
+      move.to2,
+      move.probability || 0.5
+    );
+  }
+  
   // Clear en passant
   newBoard = setEnPassantTarget(newBoard, null);
+  
+  return newBoard;
+}
+
+/**
+ * Update entanglements when a piece involved in entanglement undergoes a split
+ */
+function updateEntanglementsAfterSplit(
+  board: BoardState,
+  splitPieceId: string,
+  fromSquare: SquareIndex,
+  to1: SquareIndex,
+  to2: SquareIndex,
+  splitRatio: number
+): BoardState {
+  const newBoard = cloneBoardState(board);
+  
+  if (!newBoard.entanglements) return newBoard;
+  
+  // Find entanglements involving the split piece
+  const affectedEntanglements = newBoard.entanglements.filter(e => 
+    e.pieceIds.includes(splitPieceId)
+  );
+  
+  if (affectedEntanglements.length === 0) return newBoard;
+  
+  console.log('[updateEntanglementsAfterSplit] Found entanglements to update:', affectedEntanglements);
+  
+  for (const ent of affectedEntanglements) {
+    // Create new joint states by splitting each old joint state
+    const newJointStates: Record<string, number> = {};
+    
+    for (const [oldKey, oldProb] of Object.entries(ent.jointStates)) {
+      const positions = parseJointKey(oldKey);
+      const splitPiecePos = positions.get(splitPieceId);
+      
+      if (splitPiecePos === fromSquare) {
+        // This joint state had the piece at the split source
+        // Split it into two new joint states
+        
+        // State 1: piece goes to to1
+        const positions1 = new Map(positions);
+        positions1.set(splitPieceId, to1);
+        const key1 = createJointKey(positions1);
+        newJointStates[key1] = (newJointStates[key1] || 0) + oldProb * splitRatio;
+        
+        // State 2: piece goes to to2
+        const positions2 = new Map(positions);
+        positions2.set(splitPieceId, to2);
+        const key2 = createJointKey(positions2);
+        newJointStates[key2] = (newJointStates[key2] || 0) + oldProb * (1 - splitRatio);
+      } else {
+        // This joint state had the piece elsewhere - keep it
+        newJointStates[oldKey] = oldProb;
+      }
+    }
+    
+    console.log('[updateEntanglementsAfterSplit] Updated joint states:', newJointStates);
+    
+    // Update the entanglement in the board
+    const entIndex = newBoard.entanglements.findIndex(e =>
+      e.pieceIds.every(id => ent.pieceIds.includes(id)) &&
+      ent.pieceIds.every(id => e.pieceIds.includes(id))
+    );
+    
+    if (entIndex !== -1) {
+      newBoard.entanglements[entIndex] = {
+        ...ent,
+        jointStates: newJointStates,
+        description: `${ent.description} [after split]`,
+      };
+    }
+  }
+  
+  return newBoard;
+}
+
+/**
+ * Update entanglements when a piece moves from one square to another
+ * Similar to split but simpler - just update the square in joint states
+ */
+function updateEntanglementsAfterMove(
+  board: BoardState,
+  movedPieceId: string,
+  fromSquare: SquareIndex,
+  toSquare: SquareIndex
+): BoardState {
+  const newBoard = cloneBoardState(board);
+  
+  if (!newBoard.entanglements) return newBoard;
+  
+  const affectedEntanglements = newBoard.entanglements.filter(e =>
+    e.pieceIds.includes(movedPieceId)
+  );
+  
+  if (affectedEntanglements.length === 0) return newBoard;
+  
+  console.log('[updateEntanglementsAfterMove] Updating entanglements for move', fromSquare, '→', toSquare);
+  
+  for (const ent of affectedEntanglements) {
+    const newJointStates: Record<string, number> = {};
+    
+    for (const [oldKey, prob] of Object.entries(ent.jointStates)) {
+      const positions = parseJointKey(oldKey);
+      const piecePos = positions.get(movedPieceId);
+      
+      if (piecePos === fromSquare) {
+        // Update position in this joint state
+        positions.set(movedPieceId, toSquare);
+        const newKey = createJointKey(positions);
+        newJointStates[newKey] = prob;
+      } else {
+        // Keep as is
+        newJointStates[oldKey] = prob;
+      }
+    }
+    
+    // Update the entanglement
+    const entIndex = newBoard.entanglements.findIndex(e =>
+      e.pieceIds.every(id => ent.pieceIds.includes(id)) &&
+      ent.pieceIds.every(id => e.pieceIds.includes(id))
+    );
+    
+    if (entIndex !== -1) {
+      newBoard.entanglements[entIndex] = {
+        ...ent,
+        jointStates: newJointStates,
+      };
+    }
+  }
   
   return newBoard;
 }
@@ -948,10 +1159,72 @@ function executeMergeMove(board: BoardState, move: MergeMove): BoardState {
     // No blockers - standard quantum merge
     const newSuperposition = quantumMerge(piece, move.from1, move.from2, move.to);
     newBoard = updatePieceSuperposition(newBoard, move.pieceId, newSuperposition);
+    
+    // Update existing entanglements if piece was already entangled
+    if (isPieceEntangled(newBoard, move.pieceId)) {
+      newBoard = updateEntanglementsAfterMerge(newBoard, move.pieceId, move.from1, move.from2, move.to);
+    }
   }
   
   // Clear en passant
   newBoard = setEnPassantTarget(newBoard, null);
+  
+  return newBoard;
+}
+
+/**
+ * Update entanglements when a piece merges from two squares to one
+ */
+function updateEntanglementsAfterMerge(
+  board: BoardState,
+  mergedPieceId: string,
+  from1: SquareIndex,
+  from2: SquareIndex,
+  to: SquareIndex
+): BoardState {
+  const newBoard = cloneBoardState(board);
+  
+  if (!newBoard.entanglements) return newBoard;
+  
+  const affectedEntanglements = newBoard.entanglements.filter(e =>
+    e.pieceIds.includes(mergedPieceId)
+  );
+  
+  if (affectedEntanglements.length === 0) return newBoard;
+  
+  console.log('[updateEntanglementsAfterMerge] Updating entanglements for merge');
+  
+  for (const ent of affectedEntanglements) {
+    const newJointStates: Record<string, number> = {};
+    
+    for (const [oldKey, prob] of Object.entries(ent.jointStates)) {
+      const positions = parseJointKey(oldKey);
+      const piecePos = positions.get(mergedPieceId);
+      
+      if (piecePos === from1 || piecePos === from2) {
+        // Both source positions merge to target
+        positions.set(mergedPieceId, to);
+        const newKey = createJointKey(positions);
+        newJointStates[newKey] = (newJointStates[newKey] || 0) + prob;
+      } else {
+        // Keep as is
+        newJointStates[oldKey] = (newJointStates[oldKey] || 0) + prob;
+      }
+    }
+    
+    // Update the entanglement
+    const entIndex = newBoard.entanglements.findIndex(e =>
+      e.pieceIds.every(id => ent.pieceIds.includes(id)) &&
+      ent.pieceIds.every(id => e.pieceIds.includes(id))
+    );
+    
+    if (entIndex !== -1) {
+      newBoard.entanglements[entIndex] = {
+        ...ent,
+        jointStates: newJointStates,
+      };
+    }
+  }
   
   return newBoard;
 }

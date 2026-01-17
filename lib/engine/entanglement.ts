@@ -622,3 +622,139 @@ export function removeEntanglement(
   
   return newBoard;
 }
+
+/**
+ * Get all entanglements involving a specific piece
+ */
+export function getEntanglementsInvolving(
+  board: BoardState,
+  pieceId: string
+): Entanglement[] {
+  if (!board.entanglements) return [];
+  return board.entanglements.filter(e => e.pieceIds.includes(pieceId));
+}
+
+/**
+ * Collapse entanglements when a piece is measured and found at a specific square
+ * This updates all entangled pieces' probabilities based on the measurement outcome
+ * 
+ * @param board Current board state
+ * @param measuredPieceId ID of piece that was measured
+ * @param collapsedSquare Square where the piece was found (100% probability)
+ * @returns Updated board with collapsed entanglements
+ */
+export function collapseEntanglements(
+  board: BoardState,
+  measuredPieceId: string,
+  collapsedSquare: SquareIndex
+): BoardState {
+  let newBoard = cloneBoardState(board);
+  
+  console.log(`[collapseEntanglements] Called for piece ${measuredPieceId} at square ${collapsedSquare}`);
+  
+  if (!newBoard.entanglements || newBoard.entanglements.length === 0) {
+    console.log('[collapseEntanglements] No entanglements found');
+    return newBoard;
+  }
+  
+  const affectedEntanglements = getEntanglementsInvolving(newBoard, measuredPieceId);
+  
+  console.log(`[collapseEntanglements] Found ${affectedEntanglements.length} affected entanglements:`, affectedEntanglements);
+  
+  if (affectedEntanglements.length === 0) {
+    return newBoard;
+  }
+  
+  // Process each affected entanglement
+  for (const ent of affectedEntanglements) {
+    console.log(`[collapseEntanglements] Processing entanglement:`, ent);
+    
+    // Filter joint states to only those consistent with the measurement
+    const consistentStates: JointState = {};
+    let totalProb = 0;
+    
+    for (const [key, prob] of Object.entries(ent.jointStates)) {
+      const positions = parseJointKey(key);
+      const measuredPos = positions.get(measuredPieceId);
+      
+      console.log(`[collapseEntanglements] Joint state ${key}: measured piece at ${measuredPos}, looking for ${collapsedSquare}`);
+      
+      if (measuredPos === collapsedSquare) {
+        // This joint state is consistent with measurement
+        consistentStates[key] = prob;
+        totalProb += prob;
+        console.log(`[collapseEntanglements] Joint state ${key} is consistent, prob=${prob}`);
+      }
+    }
+    
+    if (totalProb === 0) {
+      // No consistent states - this shouldn't happen but handle gracefully
+      console.warn(`No consistent states found for entanglement after measuring ${measuredPieceId} at ${collapsedSquare}`);
+      continue;
+    }
+    
+    // Renormalize the consistent states
+    for (const key in consistentStates) {
+      consistentStates[key] /= totalProb;
+    }
+    
+    // Calculate marginal probabilities for each other piece in the entanglement
+    for (const otherId of ent.pieceIds) {
+      if (otherId === measuredPieceId) continue;
+      
+      const marginalProbs: SuperpositionState = {};
+      
+      for (const [key, prob] of Object.entries(consistentStates)) {
+        const positions = parseJointKey(key);
+        const square = positions.get(otherId);
+        
+        if (square !== undefined) {
+          marginalProbs[square] = (marginalProbs[square] || 0) + prob;
+        }
+      }
+      
+      // Update the other piece's superposition with marginal probabilities
+      newBoard = updatePieceSuperposition(newBoard, otherId, marginalProbs);
+    }
+    
+    // Update or remove the entanglement
+    if (Object.keys(consistentStates).length === 1) {
+      // Fully collapsed - all pieces are certain, remove entanglement
+      newBoard.entanglements = newBoard.entanglements.filter(e => 
+        !(e.pieceIds.every(id => ent.pieceIds.includes(id)) && 
+          ent.pieceIds.every(id => e.pieceIds.includes(id)))
+      );
+    } else {
+      // Partially collapsed - update with consistent states
+      const entIndex = newBoard.entanglements.findIndex(e =>
+        e.pieceIds.every(id => ent.pieceIds.includes(id)) && 
+        ent.pieceIds.every(id => e.pieceIds.includes(id))
+      );
+      
+      if (entIndex !== -1) {
+        newBoard.entanglements[entIndex] = {
+          ...ent,
+          jointStates: consistentStates,
+          description: `${ent.description} [collapsed]`,
+        };
+      }
+    }
+    
+    // Check for cascading collapses - if any other piece became certain (100% at one square),
+    // recursively collapse its entanglements
+    for (const otherId of ent.pieceIds) {
+      if (otherId === measuredPieceId) continue;
+      
+      const otherPiece = getPieceById(newBoard, otherId);
+      if (!otherPiece) continue;
+      
+      const squares = Object.keys(otherPiece.superposition);
+      if (squares.length === 1 && otherPiece.superposition[parseInt(squares[0])] === 1.0) {
+        // This piece also collapsed - recursively collapse its entanglements
+        newBoard = collapseEntanglements(newBoard, otherId, parseInt(squares[0]));
+      }
+    }
+  }
+  
+  return newBoard;
+}
