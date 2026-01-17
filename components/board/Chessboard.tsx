@@ -13,9 +13,10 @@ import type { MoveMode } from '@/components/game/MoveModSelector';
 
 interface ChessboardProps {
   mode: MoveMode;
+  flipped?: boolean;
 }
 
-export function Chessboard({ mode }: ChessboardProps) {
+export function Chessboard({ mode, flipped = false }: ChessboardProps) {
   const board = useGameStore((state) => state.board);
   const selectedSquare = useGameStore((state) => state.selectedSquare);
   const legalMoves = useGameStore((state) => state.legalMoves);
@@ -351,8 +352,18 @@ export function Chessboard({ mode }: ChessboardProps) {
     const squares = [];
     
     // Render from rank 7 (8th rank) down to rank 0 (1st rank)
-    for (let rank = 7; rank >= 0; rank--) {
-      for (let file = 0; file < 8; file++) {
+    // If flipped, render from rank 0 to 7
+    const rankStart = flipped ? 0 : 7;
+    const rankEnd = flipped ? 7 : 0;
+    const rankStep = flipped ? 1 : -1;
+    
+    for (let rank = rankStart; flipped ? rank <= rankEnd : rank >= rankEnd; rank += rankStep) {
+      // If flipped, render files from 7 to 0, otherwise 0 to 7
+      const fileStart = flipped ? 7 : 0;
+      const fileEnd = flipped ? 0 : 7;
+      const fileStep = flipped ? -1 : 1;
+      
+      for (let file = fileStart; flipped ? file >= fileEnd : file <= fileEnd; file += fileStep) {
         const index = rank * 8 + file;
         const isLight = (rank + file) % 2 === 1;
         

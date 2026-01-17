@@ -441,7 +441,7 @@ function generateEnPassantMove(
 // Move Validation
 
 /** Validate if move is legal */
-export function validateMove(board: BoardState, move: Move): MoveValidationResult {
+export function validateMove(board: BoardState, move: Move, sandboxMode = false): MoveValidationResult {
   const piece = getPieceById(board, move.pieceId);
   
   if (!piece) {
@@ -451,8 +451,8 @@ export function validateMove(board: BoardState, move: Move): MoveValidationResul
     };
   }
   
-  // Check if it's the correct player's turn
-  if (piece.color !== board.activeColor) {
+  // Check if it's the correct player's turn (skip in sandbox mode)
+  if (!sandboxMode && piece.color !== board.activeColor) {
     return {
       isLegal: false,
       reason: 'Not your turn',

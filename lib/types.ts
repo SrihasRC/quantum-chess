@@ -271,6 +271,7 @@ export interface GameState {
   legalMoves: Move[]; // legal moves for selected piece
   boardStateHistory: BoardState[]; // history of board states for navigation
   currentMoveIndex: number; // -1 = before any moves, 0 = after first move, etc.
+  sandboxMode?: boolean; // if true, allow moving any piece regardless of turn
 }
 
 // UI State

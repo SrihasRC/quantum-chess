@@ -125,35 +125,40 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const piece = getPieceAt(state.board, square);
     let pieceAtSquare = piece;
     
-    // If no classical piece, check for superposed pieces of the current player
+    // If no classical piece, check for superposed pieces
     if (!piece) {
       const superposedPieces = getPiecesAtSquare(state.board, square);
-      const playerSuperposedPieces = superposedPieces.filter(p => p.color === state.board.activeColor);
+      // In sandbox mode, allow any piece; in normal mode, filter by active color
+      const relevantPieces = state.sandboxMode 
+        ? superposedPieces 
+        : superposedPieces.filter(p => p.color === state.board.activeColor);
       
-      if (playerSuperposedPieces.length > 0) {
+      if (relevantPieces.length > 0) {
         // Found superposed piece(s) - select it WITHOUT measuring yet
         // Measurement will happen when attempting to move/capture
-        pieceAtSquare = playerSuperposedPieces[0];
+        pieceAtSquare = relevantPieces[0];
       }
     }
     
-    if (!pieceAtSquare || pieceAtSquare.color !== state.board.activeColor) {
-      // No piece or enemy piece - maybe it's a move destination?
-      if (state.selectedSquare !== null) {
-        // Try to execute move
-        const move = state.legalMoves.find(m => {
-          if (m.type === 'normal' || m.type === 'capture') {
-            return m.to === square;
-          }
-          return false;
-        });
-        
-        if (move) {
-          get().movePiece(move);
-          return;
+    // First, check if this is a move destination (including captures) for currently selected piece
+    if (state.selectedSquare !== null) {
+      const move = state.legalMoves.find(m => {
+        if (m.type === 'normal' || m.type === 'capture') {
+          return m.to === square;
         }
-      }
+        return false;
+      });
       
+      if (move) {
+        get().movePiece(move);
+        return;
+      }
+    }
+    
+    // In sandbox mode, allow selecting any piece regardless of turn
+    // In normal mode, only allow selecting own pieces
+    if (!pieceAtSquare || (!state.sandboxMode && pieceAtSquare.color !== state.board.activeColor)) {
+      // No piece or enemy piece (and not a valid move destination)
       // Deselect
       set({
         selectedSquare: null,
@@ -170,9 +175,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       // If no classical piece at selected square, check for superposed pieces
       if (!selectedPiece) {
         const superposedPieces = getPiecesAtSquare(state.board, state.selectedSquare);
-        const playerPieces = superposedPieces.filter(p => p.color === state.board.activeColor);
-        if (playerPieces.length > 0) {
-          selectedPieceId = playerPieces[0].id;
+        // In sandbox mode, get any piece; in normal mode, filter by active color
+        const relevantPieces = state.sandboxMode 
+          ? superposedPieces 
+          : superposedPieces.filter(p => p.color === state.board.activeColor);
+        if (relevantPieces.length > 0) {
+          selectedPieceId = relevantPieces[0].id;
         }
       }
       
@@ -215,7 +223,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     
     // Validate move
-    const validation = validateMove(state.board, move);
+    const validation = validateMove(state.board, move, state.sandboxMode);
     if (!validation.isLegal) {
       console.error('Illegal move:', validation.reason);
       return;
@@ -257,8 +265,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
             currentBoard = removePiece(currentBoard, move.pieceId);
           }
           
-          // Switch turn since measurement counts as the move
-          const finalBoard = switchTurn(currentBoard);
+          // Switch turn since measurement counts as the move (unless in sandbox mode)
+          const finalBoard = state.sandboxMode ? currentBoard : switchTurn(currentBoard);
           set({ 
             board: finalBoard,
             selectedSquare: null,
@@ -315,7 +323,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             
             // Pawn can't move diagonally without a capture
             // Pawn stays at its current position (already collapsed to source from earlier measurement)
-            const finalBoard = switchTurn(currentBoard);
+            const finalBoard = state.sandboxMode ? currentBoard : switchTurn(currentBoard);
             set({ 
               board: finalBoard,
               selectedSquare: null,
@@ -362,8 +370,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         return;
     }
     
-    // Switch turn
-    newBoard = switchTurn(newBoard);
+    // Switch turn (unless in sandbox mode)
+    newBoard = state.sandboxMode ? newBoard : switchTurn(newBoard);
     
     // Check win condition
     const whiteKingProb = getKingProbability(newBoard, 'white');

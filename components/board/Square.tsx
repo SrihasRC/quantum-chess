@@ -30,6 +30,7 @@ export function Square({
 
   return (
     <div
+      data-square={index}
       onClick={onClick}
       className={cn(
         'relative aspect-square cursor-pointer transition-colors',

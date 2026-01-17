@@ -1,11 +1,15 @@
 'use client';
 
 import { Crown } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useGameStore } from '@/lib/store/gameStore';
 
 export function Header() {
   const newGame = useGameStore((state) => state.newGame);
+  const pathname = usePathname();
+  const isSandbox = pathname === '/sandbox';
 
   return (
     <header className="border-b border-border bg-card">
@@ -23,8 +27,21 @@ export function Header() {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
+            {isSandbox ? (
+              <Link href="/">
+                <Button variant="outline" size="sm">
+                  ← Game Mode
+                </Button>
+              </Link>
+            ) : (
+              <Link href="/sandbox">
+                <Button variant="outline" size="sm">
+                  🧪 Sandbox
+                </Button>
+              </Link>
+            )}
             <Button onClick={newGame} variant="outline" size="sm">
-              New Game
+              {isSandbox ? 'Clear Board' : 'New Game'}
             </Button>
           </div>
         </div>
