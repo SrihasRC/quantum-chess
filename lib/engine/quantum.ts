@@ -9,7 +9,6 @@ import type {
   MeasurementResult,
   SquareIndex,
   BoardState,
-  Entanglement,
 } from '@/lib/types';
 import {
   normalizeProbabilities,
@@ -18,12 +17,8 @@ import {
 import {
   getPieceById,
   updatePieceSuperposition,
-  cloneBoardState,
   getPiecesAtSquare,
 } from './state';
-import {
-  getSquaresBetween,
-} from './utils';
 
 // Split Move - Create Superposition
 
