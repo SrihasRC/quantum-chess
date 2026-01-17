@@ -225,20 +225,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return;
     }
     
-    // For captures, ALWAYS measure attacker if in superposition (before target measurement)
+    // For captures: Must measure source if in superposition (per paper section 7.3)
+    // This prevents double occupancy and determines if capture executes
     if (move.type === 'capture') {
-      let currentBoard = state.board;
-      const piece = getPieceById(currentBoard, move.pieceId);
+      const piece = getPieceById(state.board, move.pieceId);
       
       if (piece && piece.superposition[move.from] !== 1.0) {
+        let currentBoard = state.board;
         const probAtSource = piece.superposition[move.from] || 0;
         const roll = Math.random();
         
         if (roll > probAtSource) {
           // Measurement failed - attacker not at source square
-          console.log('Measurement failed - attacker not at source square');
+          console.log('Capture measurement failed - piece not at source square');
           toast.error('Measurement Failed', {
-            description: `Your piece was not found at ${indexToAlgebraic(move.from)} (${Math.round(probAtSource * 100)}% chance). Turn lost.`,
+            description: `Your ${piece.type} was not found at ${indexToAlgebraic(move.from)} (${Math.round(probAtSource * 100)}% chance). Turn lost.`,
           });
           
           // Remove probability from source and renormalize
@@ -270,91 +271,64 @@ export const useGameStore = create<GameStore>((set, get) => ({
           return;
         }
         
-        // Measurement succeeded - collapse attacker to source
+        // Measurement succeeded - collapse attacker to 100% at source
         currentBoard = updatePieceSuperposition(currentBoard, move.pieceId, { [move.from]: 1.0 });
+        set({ board: currentBoard });
       }
       
-      // Update board state for subsequent target measurement
-      set({ board: currentBoard });
-    }
-    
-    // Handle target measurement if required
-    if (validation.requiresMeasurement && validation.measurementSquare !== undefined) {
-      let currentBoard = state.board;
-      
-      if (move.type === 'capture' && move.capturedPieceId) {
-          const targetPiece = getPieceById(currentBoard, move.capturedPieceId);
-          if (targetPiece && targetPiece.superposition[move.to] !== 1.0) {
-            // Perform PARTIAL measurement - check if piece is at capture square
-            // Use weighted random to determine outcome based on probability
-            const probAtTarget = targetPiece.superposition[move.to] || 0;
-            const measurementSuccess = Math.random() < probAtTarget;
+      // For PAWN captures only: Also measure target if in superposition
+      // Pawn capture requires BOTH source and target to be occupied (paper section 7.3.1)
+      if (piece && piece.type === 'pawn' && move.capturedPieceId) {
+        let currentBoard = get().board;
+        const targetPiece = getPieceById(currentBoard, move.capturedPieceId);
+        
+        if (targetPiece && targetPiece.superposition[move.to] !== 1.0) {
+          const probAtTarget = targetPiece.superposition[move.to] || 0;
+          const roll = Math.random();
+          
+          if (roll > probAtTarget) {
+            // Measurement failed - target not at capture square
+            console.log('Pawn capture measurement failed - target not at capture square');
+            toast.info('Capture Failed', {
+              description: `Target piece was not found at ${indexToAlgebraic(move.to)} (${Math.round(probAtTarget * 100)}% chance). Pawn moves to empty diagonal.`,
+            });
             
-            if (!measurementSuccess) {
-              // Measurement failed - piece not at target square
-              console.log('Measurement failed - target not at capture square');
-              toast.info('Capture Failed', {
-                description: `Target piece was not found at ${indexToAlgebraic(move.to)}. Moving to empty square.`,
-              });
-              
-              // Partial measurement: Remove probability from measured square and renormalize
-              const newSuperposition: Record<number, number> = {};
-              for (const [square, prob] of Object.entries(targetPiece.superposition)) {
-                const sq = parseInt(square);
-                if (sq !== move.to) {
-                  newSuperposition[sq] = prob;
-                }
+            // Partial measurement: Remove probability from target square and renormalize
+            const newSuperposition: Record<number, number> = {};
+            for (const [square, prob] of Object.entries(targetPiece.superposition)) {
+              const sq = parseInt(square);
+              if (sq !== move.to) {
+                newSuperposition[sq] = prob;
               }
-              
-              // Renormalize remaining probabilities
-              const totalProb = Object.values(newSuperposition).reduce((sum, p) => sum + p, 0);
-              if (totalProb > 0) {
-                for (const square in newSuperposition) {
-                  newSuperposition[square] = newSuperposition[square] / totalProb;
-                }
-                currentBoard = updatePieceSuperposition(currentBoard, move.capturedPieceId, newSuperposition);
-              } else {
-                // All probability exhausted - remove piece
-                currentBoard = removePiece(currentBoard, move.capturedPieceId);
-              }
-              
-              // Target not there - execute as normal move
-              const moveAsNormal: NormalMove = {
-                type: 'normal',
-                pieceId: move.pieceId,
-                from: move.from,
-                to: move.to,
-              };
-              
-              const finalBoard = executeNormalMove(currentBoard, moveAsNormal);
-              const notation = formatMoveSimple(move.from, move.to, getPieceById(finalBoard, move.pieceId)!.type);
-              
-              // Switch turn and update state
-              const nextBoard = switchTurn(finalBoard);
-              set({ 
-                board: nextBoard,
-                selectedSquare: null,
-                legalMoves: [],
-                moveHistory: [
-                  ...state.moveHistory,
-                  {
-                    move: moveAsNormal,
-                    notation,
-                    timestamp: Date.now(),
-                  },
-                ],
-                boardStateHistory: [...state.boardStateHistory, cloneBoardState(nextBoard)],
-                currentMoveIndex: state.moveHistory.length,
-              });
-              return;
             }
             
-            // Measurement succeeded - collapse piece to target square
-            currentBoard = updatePieceSuperposition(currentBoard, move.capturedPieceId, { [move.to]: 1.0 });
+            const totalProb = Object.values(newSuperposition).reduce((sum, p) => sum + p, 0);
+            if (totalProb > 0) {
+              for (const square in newSuperposition) {
+                newSuperposition[square] = newSuperposition[square] / totalProb;
+              }
+              currentBoard = updatePieceSuperposition(currentBoard, move.capturedPieceId, newSuperposition);
+            } else {
+              currentBoard = removePiece(currentBoard, move.capturedPieceId);
+            }
+            
+            // Execute as normal move to empty square (pawn diagonal move to empty square is illegal)
+            // In standard chess, pawn can't move diagonally without capture
+            // So we just end the turn with the attacker collapsed
+            const finalBoard = switchTurn(currentBoard);
+            set({ 
+              board: finalBoard,
+              selectedSquare: null,
+              legalMoves: [],
+            });
+            return;
           }
+          
+          // Measurement succeeded - collapse target to capture square
+          currentBoard = updatePieceSuperposition(currentBoard, move.capturedPieceId, { [move.to]: 1.0 });
+          set({ board: currentBoard });
         }
-      
-      set({ board: currentBoard });
+      }
     }
     
     // Execute move based on type
@@ -699,18 +673,28 @@ function executeCaptureMove(board: BoardState, move: NormalMove): BoardState {
           newBoard = updatePiecesFromEntanglement(newBoard, result.entanglement);
         }
       } else {
-        // No blockers - classical capture (collapse to capture square)
-        const newSuperposition = classicalMove(piece, move.to);
+        // No blockers - unitary capture: move probability amplitude from->to
+        // This preserves superposition structure (no collapse)
+        const newSuperposition: Record<number, number> = { ...piece.superposition };
+        const probAtSource = newSuperposition[move.from] || 0;
+        delete newSuperposition[move.from];
+        newSuperposition[move.to] = (newSuperposition[move.to] || 0) + probAtSource;
         newBoard = updatePieceSuperposition(newBoard, move.pieceId, newSuperposition);
       }
     } else {
-      // No path - classical capture (collapse to capture square)
-      const newSuperposition = classicalMove(piece, move.to);
+      // No path - unitary capture: move probability amplitude from->to
+      const newSuperposition: Record<number, number> = { ...piece.superposition };
+      const probAtSource = newSuperposition[move.from] || 0;
+      delete newSuperposition[move.from];
+      newSuperposition[move.to] = (newSuperposition[move.to] || 0) + probAtSource;
       newBoard = updatePieceSuperposition(newBoard, move.pieceId, newSuperposition);
     }
   } else {
-    // Non-sliding piece - classical capture (collapse to capture square)
-    const newSuperposition = classicalMove(piece, move.to);
+    // Non-sliding piece - unitary capture: move probability amplitude from->to
+    const newSuperposition: Record<number, number> = { ...piece.superposition };
+    const probAtSource = newSuperposition[move.from] || 0;
+    delete newSuperposition[move.from];
+    newSuperposition[move.to] = (newSuperposition[move.to] || 0) + probAtSource;
     newBoard = updatePieceSuperposition(newBoard, move.pieceId, newSuperposition);
   }
   
@@ -718,7 +702,8 @@ function executeCaptureMove(board: BoardState, move: NormalMove): BoardState {
   const updatedPiece = getPieceById(newBoard, move.pieceId);
   if (!updatedPiece) return newBoard;
   
-  // Handle captured piece - only remove from target square
+  // Handle captured piece - per paper section 7.3, capture is unitary
+  // The captured piece is moved to "captured ancilla" without measurement
   if (move.capturedPieceId) {
     const capturedPiece = getPieceById(newBoard, move.capturedPieceId);
     if (capturedPiece) {
@@ -727,29 +712,34 @@ function executeCaptureMove(board: BoardState, move: NormalMove): BoardState {
         newBoard = removeEntanglement(newBoard, move.capturedPieceId);
       }
       
-      // Check if piece is certain at target (classical capture)
+      // Unitary capture: Remove the probability amplitude at target square
+      // This simulates U_jump(s,t) followed by U_jump(t,c) from the paper
+      // In classical probability simulation, we simply remove the captured piece
+      // at the target location (it moves to captured ancilla space)
+      
       if (capturedPiece.superposition[move.to] === 1.0) {
-        // Remove entire piece (it's only at this square)
+        // Piece is certain at target - full capture
         newBoard = removePiece(newBoard, move.capturedPieceId);
       } else {
-        // Piece is in superposition - remove only this square and renormalize
+        // Piece is in superposition at target - partial capture
+        // Remove probability at target square WITHOUT measuring or renormalizing
+        // This preserves quantum coherence - unitary operation per paper
         const newSuperposition: Record<number, number> = {};
+        let hasRemainingProb = false;
+        
         for (const [square, prob] of Object.entries(capturedPiece.superposition)) {
           const sq = parseInt(square);
           if (sq !== move.to) {
             newSuperposition[sq] = prob;
+            hasRemainingProb = true;
           }
         }
         
-        // Renormalize remaining probabilities
-        const totalProb = Object.values(newSuperposition).reduce((sum, p) => sum + p, 0);
-        if (totalProb > 0) {
-          for (const square in newSuperposition) {
-            newSuperposition[square] = newSuperposition[square] / totalProb;
-          }
+        // Do NOT renormalize - this is unitary removal of amplitude
+        if (hasRemainingProb) {
           newBoard = updatePieceSuperposition(newBoard, move.capturedPieceId, newSuperposition);
         } else {
-          // All probability removed, piece is captured completely
+          // All probability removed, piece is fully captured
           newBoard = removePiece(newBoard, move.capturedPieceId);
         }
       }

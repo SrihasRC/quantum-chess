@@ -524,11 +524,10 @@ function validateNormalMove(
     const enemyPieces = superposedPieces.filter(p => p.color !== piece.color);
     
     if (enemyPieces.length > 0) {
-      // Capturing a superposed piece requires measurement
+      // Per paper section 7.3: Capture is unitary, no target measurement
+      // Target piece is moved to captured ancilla without measurement
       return {
         isLegal: true,
-        requiresMeasurement: true,
-        measurementSquare: move.to,
       };
     }
     
