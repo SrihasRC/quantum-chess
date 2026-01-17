@@ -14,7 +14,6 @@ import type {
   NormalMove,
   SplitMove,
   MergeMove,
-  SuperpositionState,
 } from '@/lib/types';
 import {
   createInitialBoardState,
@@ -36,15 +35,12 @@ import {
 import {
   splitMove as quantumSplit,
   mergeMove as quantumMerge,
-  classicalMove,
   moveProbability,
-  measurePieceOnBoard,
   createMoveEntanglement,
   createSplitEntanglement,
   createMergeEntanglement,
   updatePiecesFromEntanglement,
   isPieceEntangled,
-  collapseEntangledMeasurement,
   removeEntanglement,
 } from '@/lib/engine/quantum';
 import {
@@ -278,8 +274,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
       
       // For PAWN captures only: Also measure target if in superposition
       // Pawn capture requires BOTH source and target to be occupied (paper section 7.3.1)
-      if (piece && (piece.type === 'P' || piece.type === 'p') && move.capturedPieceId) {
-        let currentBoard = get().board;
+      const currentBoardForPawn = get().board;
+      const pawnPiece = getPieceById(currentBoardForPawn, move.pieceId);
+      // Use includes to avoid TypeScript type narrowing issues
+      const isPawnCapture = pawnPiece && (['P', 'p'] as const).includes(pawnPiece.type as 'P' | 'p');
+      
+      if (isPawnCapture && move.capturedPieceId) {
+        let currentBoard = currentBoardForPawn;
         const targetPiece = getPieceById(currentBoard, move.capturedPieceId);
         
         if (targetPiece && targetPiece.superposition[move.to] !== 1.0) {
