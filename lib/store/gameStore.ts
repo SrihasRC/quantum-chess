@@ -166,8 +166,69 @@ export const useGameStore = create<GameStore>((set, get) => ({
       });
       
       if (move) {
-        // For promotion moves, show piece selection UI
+        // For promotion moves, handle measurement if needed and show dialog
         if (move.type === 'promotion') {
+          // For capture promotions with superposed pawn, measure before showing dialog
+          if (move.capturedPieceId) {
+            const piece = getPieceById(state.board, move.pieceId);
+            
+            // If pawn is in superposition, measure before showing promotion dialog
+            if (piece && piece.superposition[move.from] !== 1.0) {
+              const probAtSource = piece.superposition[move.from] || 0;
+              const roll = Math.random();
+              
+              if (roll > probAtSource) {
+                // Measurement failed - pawn not at source square
+                toast.error('Measurement Failed', {
+                  description: `Your ${piece.type} was not found at ${indexToAlgebraic(move.from)} (${Math.round(probAtSource * 100)}% chance). Turn lost.`,
+                });
+                
+                // Remove probability from source and renormalize
+                let currentBoard = state.board;
+                const newSuperposition: Record<number, number> = {};
+                for (const [square, prob] of Object.entries(piece.superposition)) {
+                  const sq = parseInt(square);
+                  if (sq !== move.from) {
+                    newSuperposition[sq] = prob;
+                  }
+                }
+                
+                const totalProb = Object.values(newSuperposition).reduce((sum, p) => sum + p, 0);
+                if (totalProb > 0) {
+                  for (const square in newSuperposition) {
+                    newSuperposition[square] = newSuperposition[square] / totalProb;
+                  }
+                  currentBoard = updatePieceSuperposition(currentBoard, move.pieceId, newSuperposition);
+                  
+                  // If piece collapsed to a single square, collapse entanglements
+                  const squares = Object.keys(newSuperposition);
+                  if (squares.length === 1) {
+                    const collapsedSquare = parseInt(squares[0]);
+                    currentBoard = collapseEntanglements(currentBoard, move.pieceId, collapsedSquare);
+                  }
+                } else {
+                  currentBoard = removePiece(currentBoard, move.pieceId);
+                }
+                
+                // Switch turn since measurement counts as the move (unless in sandbox mode)
+                const finalBoard = state.sandboxMode ? currentBoard : switchTurn(currentBoard);
+                set({ 
+                  board: finalBoard,
+                  selectedSquare: null,
+                  legalMoves: [],
+                });
+                return;
+              }
+              
+              // Measurement succeeded - collapse pawn to source
+              let currentBoard = state.board;
+              currentBoard = updatePieceSuperposition(currentBoard, move.pieceId, { [move.from]: 1.0 });
+              currentBoard = collapseEntanglements(currentBoard, move.pieceId, move.from);
+              set({ board: currentBoard });
+            }
+          }
+          
+          // Show promotion dialog for all promotions
           set({
             promotionPending: {
               from: move.from,
@@ -261,8 +322,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     
     // For captures: Must measure source if in superposition (per paper section 7.3)
     // This prevents double occupancy and determines if capture executes
-    // Same applies for promotions - must measure if pawn is at source square
-    if (move.type === 'capture' || move.type === 'promotion') {
+    // For promotions: Only measure if it's a CAPTURE promotion (capturedPieceId exists)
+    // Non-capturing promotions are unitary moves (no measurement needed)
+    const needsMeasurement = move.type === 'capture' || 
+                             (move.type === 'promotion' && move.capturedPieceId);
+    
+    if (needsMeasurement) {
       const piece = getPieceById(state.board, move.pieceId);
       
       if (piece && piece.superposition[move.from] !== 1.0) {
