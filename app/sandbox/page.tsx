@@ -27,8 +27,9 @@ export default function SandboxPage() {
   useEffect(() => {
     useGameStore.setState({ sandboxMode: true });
     return () => {
-      // Disable sandbox mode when leaving
+      // Disable sandbox mode and reset board when leaving
       useGameStore.setState({ sandboxMode: false });
+      useGameStore.getState().newGame();
     };
   }, []);
 
@@ -207,17 +208,15 @@ export default function SandboxPage() {
       <Header />
       
       {/* Main content */}
-      <div className="flex-1 flex gap-4 p-4 overflow-hidden">
-        
-
+      <div className="flex-1 flex gap-4 p-4 justify-center items-center overflow-hidden">
         {/* Board with move mode selector */}
-        <div className="flex-1 flex flex-col items-center justify-center min-w-0">
-          <div className="flex items-center gap-6 w-full max-w-[90vh]">
+        <div className="flex flex-col items-center justify-center">
+          <div className="flex items-center gap-6">
             <div className="shrink-0">
               <MoveModSelector mode={moveMode} onModeChange={setMoveMode} />
             </div>
             <div
-              className="flex-1"
+              className="w-[min(90vh,90vw)]"
               onDrop={(e) => {
                 e.preventDefault();
                 const piece = e.dataTransfer.getData("piece") as PieceSymbol;
@@ -253,7 +252,7 @@ export default function SandboxPage() {
         </div>
 
         {/* Left sidebar - Pieces palette and controls */}
-        <div className="flex flex-col gap-4 w-64">
+        <div className="flex gap-4 w-64">
           {/* Pieces palette */}
           <div className="flex gap-4">
             {/* White pieces */}
