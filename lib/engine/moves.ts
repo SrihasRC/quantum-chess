@@ -190,6 +190,7 @@ function generateNormalMoves(
         // Check if there are superposed pieces at target
         const superposedPieces = getPiecesAtSquare(board, target);
         const enemyPieces = superposedPieces.filter(p => p.color !== piece.color);
+        const friendlyPieces = superposedPieces.filter(p => p.color === piece.color && p.id !== piece.id);
         const samePiece = superposedPieces.find(p => p.id === piece.id);
         
         if (samePiece) {
@@ -209,8 +210,8 @@ function generateNormalMoves(
             to: target,
             capturedPieceId: enemyPieces[0].id,
           });
-        } else {
-          // Empty square - normal move
+        } else if (friendlyPieces.length === 0) {
+          // Empty square (no friendly pieces blocking) - normal move
           moves.push({
             type: 'normal',
             pieceId: piece.id,
@@ -218,6 +219,7 @@ function generateNormalMoves(
             to: target,
           });
         }
+        // If friendlyPieces.length > 0, square is blocked by friendly piece - no move
       } else if (targetPiece.color !== piece.color) {
         // Enemy piece - capture
         moves.push({
