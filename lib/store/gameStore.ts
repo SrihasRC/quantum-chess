@@ -41,6 +41,7 @@ import {
   measurePieceOnBoard,
   createMoveEntanglement,
   createSplitEntanglement,
+  createMergeEntanglement,
   updatePiecesFromEntanglement,
   isPieceEntangled,
   collapseEntangledMeasurement,
@@ -880,10 +881,76 @@ function executeMergeMove(board: BoardState, move: MergeMove): BoardState {
   const piece = getPieceById(newBoard, move.pieceId);
   if (!piece) return newBoard;
   
-  // Merge superposition (no path entanglement for merge moves)
-  const newSuperposition = quantumMerge(piece, move.from1, move.from2, move.to);
+  // Check for blocking pieces in paths (similar to split move)
+  let blockers1: { pieceId: string; square: SquareIndex; probability: number }[] = [];
+  let blockers2: { pieceId: string; square: SquareIndex; probability: number }[] = [];
   
-  newBoard = updatePieceSuperposition(newBoard, move.pieceId, newSuperposition);
+  // Check path 1 (from source1 to target) for blockers
+  if (isSlidingMove(piece.type, move.from1, move.to)) {
+    const path1 = getSquaresBetween(move.from1, move.to);
+    if (path1.length > 0) {
+      blockers1 = getBlockingPiecesInPath(newBoard, path1, move.pieceId);
+    }
+  }
+  
+  // Check path 2 (from source2 to target) for blockers
+  if (isSlidingMove(piece.type, move.from2, move.to)) {
+    const path2 = getSquaresBetween(move.from2, move.to);
+    if (path2.length > 0) {
+      blockers2 = getBlockingPiecesInPath(newBoard, path2, move.pieceId);
+    }
+  }
+  
+  // If there are blockers in either path, create merge entanglement
+  if (blockers1.length > 0 || blockers2.length > 0) {
+    // Collect blocker data
+    const blockingPieceIds: string[] = [];
+    const blockSquares: SquareIndex[] = [];
+    const blockProbabilities: number[] = [];
+    
+    // Add blocker from path 1 if exists
+    if (blockers1.length > 0) {
+      blockingPieceIds.push(blockers1[0].pieceId);
+      blockSquares.push(blockers1[0].square);
+      blockProbabilities.push(blockers1[0].probability);
+    }
+    
+    // Add blocker from path 2 if exists
+    if (blockers2.length > 0) {
+      blockingPieceIds.push(blockers2[0].pieceId);
+      blockSquares.push(blockers2[0].square);
+      blockProbabilities.push(blockers2[0].probability);
+    }
+    
+    console.log('Creating merge entanglement with blockers:', blockingPieceIds);
+    
+    const result = createMergeEntanglement(
+      newBoard,
+      move.pieceId,
+      move.from1,
+      move.from2,
+      move.to,
+      blockingPieceIds,
+      blockSquares,
+      blockProbabilities
+    );
+    
+    console.log('Merge entanglement result:', result.entanglement);
+    
+    if (result.entanglement) {
+      // Update board from entanglement first
+      newBoard = result.board;
+      // Then update piece probabilities from joint distribution
+      newBoard = updatePiecesFromEntanglement(newBoard, result.entanglement);
+      console.log('Updated board after merge entanglement:', newBoard.pieces.find(p => p.id === move.pieceId));
+    } else {
+      newBoard = result.board;
+    }
+  } else {
+    // No blockers - standard quantum merge
+    const newSuperposition = quantumMerge(piece, move.from1, move.from2, move.to);
+    newBoard = updatePieceSuperposition(newBoard, move.pieceId, newSuperposition);
+  }
   
   // Clear en passant
   newBoard = setEnPassantTarget(newBoard, null);

@@ -289,6 +289,208 @@ export function createSplitEntanglement(
 }
 
 /**
+ * Create entanglement for merge move through superposition
+ * Following the paper's Merge Slide Unitary specification:
+ * - Both paths clear: Full merge (target: 100%)
+ * - Path 1 blocked, path 2 clear: iSwap† from s2 to target
+ * - Path 1 clear, path 2 blocked: iSwap† from s1 to target
+ * - Both paths blocked: Identity (pieces stay at sources)
+ * 
+ * Joint states created based on path blocking probabilities
+ */
+export function createMergeEntanglement(
+  board: BoardState,
+  movingPieceId: string,
+  source1: SquareIndex,
+  source2: SquareIndex,
+  targetSquare: SquareIndex,
+  blockingPieceIds: string[],
+  blockSquares: SquareIndex[],
+  blockProbabilities: number[]
+): { board: BoardState; entanglement: Entanglement | null } {
+  if (blockingPieceIds.length === 0) {
+    return { board, entanglement: null }; // No entanglement needed
+  }
+  
+  const newBoard = cloneBoardState(board);
+  const movingPiece = getPieceById(board, movingPieceId);
+  if (!movingPiece) throw new Error('Moving piece not found');
+  
+  // Get probabilities at source squares
+  const prob1 = movingPiece.superposition[source1] || 0;
+  const prob2 = movingPiece.superposition[source2] || 0;
+  
+  // Determine which paths are blocked
+  let path1BlockProb = 0;
+  let path2BlockProb = 0;
+  const involvedPieces = new Set<string>([movingPieceId]);
+  
+  if (blockingPieceIds.length === 1) {
+    // Single blocker - determine which path(s) it blocks
+    const blockSquare = blockSquares[0];
+    const blockProb = blockProbabilities[0];
+    involvedPieces.add(blockingPieceIds[0]);
+    
+    // Check if blocker is in path 1 (source1 to target)
+    const path1 = getSquaresBetween(source1, targetSquare);
+    if (path1.includes(blockSquare)) {
+      path1BlockProb = blockProb;
+    }
+    
+    // Check if blocker is in path 2 (source2 to target)
+    const path2 = getSquaresBetween(source2, targetSquare);
+    if (path2.includes(blockSquare)) {
+      path2BlockProb = blockProb;
+    }
+  } else {
+    // Two blockers - assign to respective paths
+    path1BlockProb = blockProbabilities[0];
+    path2BlockProb = blockProbabilities[1];
+    involvedPieces.add(blockingPieceIds[0]);
+    involvedPieces.add(blockingPieceIds[1]);
+  }
+  
+  const jointStates: JointState = {};
+  
+  // Apply Merge Slide Unitary logic based on path blocking
+  if (blockingPieceIds.length === 1) {
+    // Single blocker - enumerate all its positions
+    const blockingPieceId = blockingPieceIds[0];
+    const blockingPiece = getPieceById(board, blockingPieceId);
+    if (!blockingPiece) throw new Error('Blocking piece not found');
+    
+    for (const [sq, blockerProb] of Object.entries(blockingPiece.superposition)) {
+      const blockerSquare = parseInt(sq);
+      const blockSquare = blockSquares[0];
+      
+      // Determine effective path blocking for this blocker position
+      const path1Blocked = blockerSquare === blockSquare && path1BlockProb > 0;
+      const path2Blocked = blockerSquare === blockSquare && path2BlockProb > 0;
+      
+      if (!path1Blocked && !path2Blocked) {
+        // Both paths clear: Full merge to target
+        const positions = new Map<string, SquareIndex>();
+        positions.set(movingPieceId, targetSquare);
+        positions.set(blockingPieceId, blockerSquare);
+        jointStates[createJointKey(positions)] = blockerProb;
+      } else if (path1Blocked && !path2Blocked) {
+        // Path 1 blocked, path 2 clear: Move from s2 to target
+        const positions = new Map<string, SquareIndex>();
+        positions.set(movingPieceId, targetSquare);
+        positions.set(blockingPieceId, blockerSquare);
+        jointStates[createJointKey(positions)] = prob2 * blockerProb;
+        
+        // s1 stays at source1
+        const positions1 = new Map<string, SquareIndex>();
+        positions1.set(movingPieceId, source1);
+        positions1.set(blockingPieceId, blockerSquare);
+        jointStates[createJointKey(positions1)] = prob1 * blockerProb;
+      } else if (!path1Blocked && path2Blocked) {
+        // Path 1 clear, path 2 blocked: Move from s1 to target
+        const positions = new Map<string, SquareIndex>();
+        positions.set(movingPieceId, targetSquare);
+        positions.set(blockingPieceId, blockerSquare);
+        jointStates[createJointKey(positions)] = prob1 * blockerProb;
+        
+        // s2 stays at source2
+        const positions2 = new Map<string, SquareIndex>();
+        positions2.set(movingPieceId, source2);
+        positions2.set(blockingPieceId, blockerSquare);
+        jointStates[createJointKey(positions2)] = prob2 * blockerProb;
+      } else {
+        // Both paths blocked: Identity (stay at sources)
+        const positions1 = new Map<string, SquareIndex>();
+        positions1.set(movingPieceId, source1);
+        positions1.set(blockingPieceId, blockerSquare);
+        jointStates[createJointKey(positions1)] = prob1 * blockerProb;
+        
+        const positions2 = new Map<string, SquareIndex>();
+        positions2.set(movingPieceId, source2);
+        positions2.set(blockingPieceId, blockerSquare);
+        jointStates[createJointKey(positions2)] = prob2 * blockerProb;
+      }
+    }
+  } else if (blockingPieceIds.length === 2) {
+    // Two blockers - one per path
+    const blocker1Id = blockingPieceIds[0];
+    const blocker2Id = blockingPieceIds[1];
+    const blocker1 = getPieceById(board, blocker1Id);
+    const blocker2 = getPieceById(board, blocker2Id);
+    if (!blocker1 || !blocker2) throw new Error('Blocking piece not found');
+    
+    // Enumerate all combinations of blocker positions
+    for (const [sq1, bprob1] of Object.entries(blocker1.superposition)) {
+      const blocker1Square = parseInt(sq1);
+      const path1Blocked = blocker1Square === blockSquares[0];
+      
+      for (const [sq2, bprob2] of Object.entries(blocker2.superposition)) {
+        const blocker2Square = parseInt(sq2);
+        const path2Blocked = blocker2Square === blockSquares[1];
+        const combinedProb = bprob1 * bprob2;
+        
+        if (!path1Blocked && !path2Blocked) {
+          // Both paths clear: Full merge to target
+          const positions = new Map<string, SquareIndex>();
+          positions.set(movingPieceId, targetSquare);
+          positions.set(blocker1Id, blocker1Square);
+          positions.set(blocker2Id, blocker2Square);
+          jointStates[createJointKey(positions)] = combinedProb;
+        } else if (path1Blocked && !path2Blocked) {
+          // Path 1 blocked, path 2 clear: Move from s2 to target, s1 stays
+          const posTarget = new Map<string, SquareIndex>();
+          posTarget.set(movingPieceId, targetSquare);
+          posTarget.set(blocker1Id, blocker1Square);
+          posTarget.set(blocker2Id, blocker2Square);
+          jointStates[createJointKey(posTarget)] = prob2 * combinedProb;
+          
+          const posSource1 = new Map<string, SquareIndex>();
+          posSource1.set(movingPieceId, source1);
+          posSource1.set(blocker1Id, blocker1Square);
+          posSource1.set(blocker2Id, blocker2Square);
+          jointStates[createJointKey(posSource1)] = prob1 * combinedProb;
+        } else if (!path1Blocked && path2Blocked) {
+          // Path 1 clear, path 2 blocked: Move from s1 to target, s2 stays
+          const posTarget = new Map<string, SquareIndex>();
+          posTarget.set(movingPieceId, targetSquare);
+          posTarget.set(blocker1Id, blocker1Square);
+          posTarget.set(blocker2Id, blocker2Square);
+          jointStates[createJointKey(posTarget)] = prob1 * combinedProb;
+          
+          const posSource2 = new Map<string, SquareIndex>();
+          posSource2.set(movingPieceId, source2);
+          posSource2.set(blocker1Id, blocker1Square);
+          posSource2.set(blocker2Id, blocker2Square);
+          jointStates[createJointKey(posSource2)] = prob2 * combinedProb;
+        } else {
+          // Both paths blocked: Identity (stay at sources)
+          const posSource1 = new Map<string, SquareIndex>();
+          posSource1.set(movingPieceId, source1);
+          posSource1.set(blocker1Id, blocker1Square);
+          posSource1.set(blocker2Id, blocker2Square);
+          jointStates[createJointKey(posSource1)] = prob1 * combinedProb;
+          
+          const posSource2 = new Map<string, SquareIndex>();
+          posSource2.set(movingPieceId, source2);
+          posSource2.set(blocker1Id, blocker1Square);
+          posSource2.set(blocker2Id, blocker2Square);
+          jointStates[createJointKey(posSource2)] = prob2 * combinedProb;
+        }
+      }
+    }
+  }
+  
+  const entanglement: Entanglement = {
+    pieceIds: Array.from(involvedPieces),
+    jointStates,
+    description: `${movingPiece.type} merging with path entanglement`,
+  };
+  
+  newBoard.entanglements = [...(board.entanglements || []), entanglement];
+  
+  return { board: newBoard, entanglement };
+}
+
+/**
  * Update piece superpositions based on entangled joint states
  * Call this after creating entanglement to sync piece probabilities
  */
