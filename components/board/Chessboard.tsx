@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { Square } from './Square';
 import { Piece } from './Piece';
+import PromotionDialog from './PromotionDialog';
 import { useGameStore } from '@/lib/store/gameStore';
 import { getPieceAt, getPiecesAtSquare } from '@/lib/engine/state';
 import { validateMove } from '@/lib/engine/moves';
@@ -22,8 +23,11 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
   const legalMoves = useGameStore((state) => state.legalMoves);
   const currentMoveIndex = useGameStore((state) => state.currentMoveIndex);
   const moveHistory = useGameStore((state) => state.moveHistory);
+  const promotionPending = useGameStore((state) => state.promotionPending);
   const selectPiece = useGameStore((state) => state.selectPiece);
   const movePiece = useGameStore((state) => state.movePiece);
+  const selectPromotionPiece = useGameStore((state) => state.selectPromotionPiece);
+  const cancelPromotion = useGameStore((state) => state.cancelPromotion);
   
   // Split move state
   const [splitSource, setSplitSource] = useState<SquareIndex | null>(null);
@@ -412,12 +416,22 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
   };
 
   return (
-    <div className="w-full max-w-xl">
-      <div className="aspect-square w-full overflow-hidden rounded-lg border-4 border-border shadow-xl">
-        <div className="grid h-full w-full grid-cols-8 grid-rows-8">
-          {renderSquares()}
+    <>
+      <div className="w-full max-w-xl">
+        <div className="aspect-square w-full overflow-hidden rounded-lg border-4 border-border shadow-xl">
+          <div className="grid h-full w-full grid-cols-8 grid-rows-8">
+            {renderSquares()}
+          </div>
         </div>
       </div>
-    </div>
+      
+      {promotionPending && (
+        <PromotionDialog
+          color={board.activeColor}
+          onSelect={selectPromotionPiece}
+          onCancel={cancelPromotion}
+        />
+      )}
+    </>
   );
 }

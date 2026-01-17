@@ -117,16 +117,26 @@ function generateNormalMoves(
         
         // Check for promotion
         if (isPawnPromotion(target, piece.color)) {
-          // Promotion moves handled separately
-          continue;
+          // Generate promotion moves for each possible piece (Q, R, B, N)
+          console.log(`[generateLegalMoves] Generating promotion moves for pawn at ${indexToAlgebraic(fromSquare)} to ${indexToAlgebraic(target)}`);
+          const promotionPieces: PieceSymbol[] = ['Q', 'R', 'B', 'N'];
+          for (const promoteTo of promotionPieces) {
+            moves.push({
+              type: 'promotion',
+              pieceId: piece.id,
+              from: fromSquare,
+              to: target,
+              promoteTo,
+            });
+          }
+        } else {
+          moves.push({
+            type: 'normal',
+            pieceId: piece.id,
+            from: fromSquare,
+            to: target,
+          });
         }
-        
-        moves.push({
-          type: 'normal',
-          pieceId: piece.id,
-          from: fromSquare,
-          to: target,
-        });
       }
     }
     
@@ -137,27 +147,57 @@ function generateNormalMoves(
       
       // Check for classical enemy piece
       if (targetPiece && targetPiece.color !== piece.color) {
-        moves.push({
-          type: 'capture',
-          pieceId: piece.id,
-          from: fromSquare,
-          to: target,
-          capturedPieceId: targetPiece.id,
-        });
+        // Check if this capture results in promotion
+        if (isPawnPromotion(target, piece.color)) {
+          const promotionPieces: PieceSymbol[] = ['Q', 'R', 'B', 'N'];
+          for (const promoteTo of promotionPieces) {
+            moves.push({
+              type: 'promotion',
+              pieceId: piece.id,
+              from: fromSquare,
+              to: target,
+              promoteTo,
+              capturedPieceId: targetPiece.id,
+            });
+          }
+        } else {
+          moves.push({
+            type: 'capture',
+            pieceId: piece.id,
+            from: fromSquare,
+            to: target,
+            capturedPieceId: targetPiece.id,
+          });
+        }
       } else {
         // Check for superposed enemy pieces
         const superposedPieces = getPiecesAtSquare(board, target);
         const enemyPieces = superposedPieces.filter(p => p.color !== piece.color);
         
         if (enemyPieces.length > 0) {
-          // Can capture superposed piece (will trigger measurement)
-          moves.push({
-            type: 'capture',
-            pieceId: piece.id,
-            from: fromSquare,
-            to: target,
-            capturedPieceId: enemyPieces[0].id, // Take first enemy piece
-          });
+          // Check if this capture results in promotion
+          if (isPawnPromotion(target, piece.color)) {
+            const promotionPieces: PieceSymbol[] = ['Q', 'R', 'B', 'N'];
+            for (const promoteTo of promotionPieces) {
+              moves.push({
+                type: 'promotion',
+                pieceId: piece.id,
+                from: fromSquare,
+                to: target,
+                promoteTo,
+                capturedPieceId: enemyPieces[0].id,
+              });
+            }
+          } else {
+            // Can capture superposed piece (will trigger measurement)
+            moves.push({
+              type: 'capture',
+              pieceId: piece.id,
+              from: fromSquare,
+              to: target,
+              capturedPieceId: enemyPieces[0].id, // Take first enemy piece
+            });
+          }
         }
       }
     }
@@ -475,7 +515,7 @@ export function validateMove(board: BoardState, move: Move, sandboxMode = false)
     case 'en-passant':
       return { isLegal: true }; // Simplified for now
     case 'promotion':
-      return { isLegal: true }; // Simplified for now
+      return validatePromotionMove(board, move);
     default:
       return {
         isLegal: false,
@@ -698,6 +738,96 @@ function validateMergeMove(
       isLegal: false,
       reason: 'Merge target is occupied by another piece',
     };
+  }
+  
+  return { isLegal: true };
+}
+
+/**
+ * Validate promotion move
+ */
+function validatePromotionMove(
+  board: BoardState,
+  move: PromotionMove
+): MoveValidationResult {
+  const piece = getPieceById(board, move.pieceId)!;
+  
+  // Must be a pawn
+  if (piece.type !== 'P') {
+    return {
+      isLegal: false,
+      reason: 'Only pawns can promote',
+    };
+  }
+  
+  // Target must be on the promotion rank (8th for white, 1st for black)
+  if (!isPawnPromotion(move.to, piece.color)) {
+    return {
+      isLegal: false,
+      reason: 'Promotion target must be on the 8th rank (white) or 1st rank (black)',
+    };
+  }
+  
+  // Promotion piece must be valid (Q, R, B, or N)
+  const validPromotions: PieceSymbol[] = ['Q', 'R', 'B', 'N'];
+  if (!validPromotions.includes(move.promoteTo)) {
+    return {
+      isLegal: false,
+      reason: 'Can only promote to Queen, Rook, Bishop, or Knight',
+    };
+  }
+  
+  // Check if source square is reachable for the pawn
+  // For captures, check diagonal moves; for non-captures, check forward moves
+  let validTargets: SquareIndex[];
+  if (move.capturedPieceId) {
+    validTargets = getPawnCaptureSquares(move.from, piece.color);
+  } else {
+    validTargets = getPieceTargetSquares(piece.type, move.from, piece.color);
+  }
+  
+  if (!validTargets.includes(move.to)) {
+    return {
+      isLegal: false,
+      reason: move.capturedPieceId 
+        ? 'Pawn capture must be diagonal' 
+        : 'Pawn cannot reach the promotion square',
+    };
+  }
+  
+  // Check piece has probability at source
+  if (!piece.superposition[move.from] || piece.superposition[move.from] === 0) {
+    return {
+      isLegal: false,
+      reason: 'Piece is not at the source square',
+    };
+  }
+  
+  // If capturing during promotion, validate capture target
+  if (move.capturedPieceId) {
+    const capturedPiece = getPieceById(board, move.capturedPieceId);
+    if (!capturedPiece) {
+      return {
+        isLegal: false,
+        reason: 'Captured piece not found',
+      };
+    }
+    
+    if (capturedPiece.color === piece.color) {
+      return {
+        isLegal: false,
+        reason: 'Cannot capture your own piece',
+      };
+    }
+    
+    // Pawn captures must be diagonal
+    const captureSquares = getPawnCaptureSquares(move.from, piece.color);
+    if (!captureSquares.includes(move.to)) {
+      return {
+        isLegal: false,
+        reason: 'Invalid pawn capture direction',
+      };
+    }
   }
   
   return { isLegal: true };

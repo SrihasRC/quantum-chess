@@ -14,6 +14,7 @@ import type {
   NormalMove,
   SplitMove,
   MergeMove,
+  PromotionMove,
 } from '@/lib/types';
 import {
   createInitialBoardState,
@@ -61,9 +62,19 @@ import {
 // Game Store Interface
 
 interface GameStore extends GameState {
+  // Promotion state
+  promotionPending: {
+    from: SquareIndex;
+    to: SquareIndex;
+    pieceId: string;
+    capturedPieceId?: string;
+  } | null;
+  
   // Actions
   selectPiece: (square: SquareIndex) => void;
   movePiece: (move: Move) => void;
+  selectPromotionPiece: (piece: 'Q' | 'R' | 'B' | 'N') => void;
+  cancelPromotion: () => void;
   undoMove: () => void;
   newGame: () => void;
   resetSelection: () => void;
@@ -94,6 +105,7 @@ function createInitialGameState(): GameState {
     legalMoves: [],
     boardStateHistory: [cloneBoardState(initialBoard)], // Store initial board state
     currentMoveIndex: -1, // -1 means at initial position, before any moves
+    sandboxMode: false,
   };
 }
 
@@ -101,6 +113,7 @@ function createInitialGameState(): GameState {
 
 export const useGameStore = create<GameStore>((set, get) => ({
   ...createInitialGameState(),
+  promotionPending: null,
   
   // Select Piece
   
@@ -143,17 +156,31 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
     }
     
-    // First, check if this is a move destination (including captures) for currently selected piece
+    // First, check if this is a move destination (including captures and promotions) for currently selected piece
     if (state.selectedSquare !== null) {
       const move = state.legalMoves.find(m => {
-        if (m.type === 'normal' || m.type === 'capture') {
+        if (m.type === 'normal' || m.type === 'capture' || m.type === 'promotion') {
           return m.to === square;
         }
         return false;
       });
       
       if (move) {
-        get().movePiece(move);
+        // For promotion moves, show piece selection UI
+        if (move.type === 'promotion') {
+          set({
+            promotionPending: {
+              from: move.from,
+              to: move.to,
+              pieceId: move.pieceId,
+              capturedPieceId: move.capturedPieceId,
+            },
+            selectedSquare: null,
+            legalMoves: [],
+          });
+        } else {
+          get().movePiece(move);
+        }
         return;
       }
     }
@@ -234,7 +261,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     
     // For captures: Must measure source if in superposition (per paper section 7.3)
     // This prevents double occupancy and determines if capture executes
-    if (move.type === 'capture') {
+    // Same applies for promotions - must measure if pawn is at source square
+    if (move.type === 'capture' || move.type === 'promotion') {
       const piece = getPieceById(state.board, move.pieceId);
       
       if (piece && piece.superposition[move.from] !== 1.0) {
@@ -299,6 +327,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       
       // For PAWN captures only: Also measure target if in superposition
       // Pawn capture requires BOTH source and target to be occupied (paper section 7.3.1)
+      // This applies to both regular captures and promotion captures
       const currentBoardForPawn = get().board;
       const pawnPiece = getPieceById(currentBoardForPawn, move.pieceId);
       // Use includes to avoid TypeScript type narrowing issues
@@ -392,7 +421,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
         notation = `${getPieceById(newBoard, move.pieceId)!.type}${indexToAlgebraic(move.from1)}+${indexToAlgebraic(move.from2)}→${indexToAlgebraic(move.to)}`;
         break;
         
-      // TODO: Implement castling, en passant, promotion
+      case 'promotion':
+        newBoard = executePromotionMove(newBoard, move);
+        notation = `${indexToAlgebraic(move.from)}${indexToAlgebraic(move.to)}${move.promoteTo}${move.capturedPieceId ? 'x' : ''}`;
+        break;
+        
+      // TODO: Implement castling, en passant
       default:
         console.warn('Move type not yet implemented:', move.type);
         return;
@@ -532,7 +566,31 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({
       selectedSquare: null,
       legalMoves: [],
+      promotionPending: null,
     });
+  },
+  
+  // Promotion Actions
+  
+  selectPromotionPiece: (piece: 'Q' | 'R' | 'B' | 'N') => {
+    const state = get();
+    if (!state.promotionPending) return;
+    
+    const move: PromotionMove = {
+      type: 'promotion',
+      pieceId: state.promotionPending.pieceId,
+      from: state.promotionPending.from,
+      to: state.promotionPending.to,
+      promoteTo: piece,
+      capturedPieceId: state.promotionPending.capturedPieceId,
+    };
+    
+    set({ promotionPending: null });
+    get().movePiece(move);
+  },
+  
+  cancelPromotion: () => {
+    set({ promotionPending: null });
   },
   
   // Helper Methods
@@ -548,7 +606,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (state.selectedSquare === square) return true;
     
     return state.legalMoves.some(move => {
-      if (move.type === 'normal' || move.type === 'capture') {
+      if (move.type === 'normal' || move.type === 'capture' || move.type === 'promotion') {
         return move.to === square;
       }
       return false;
@@ -1225,6 +1283,69 @@ function updateEntanglementsAfterMerge(
       };
     }
   }
+  
+  return newBoard;
+}
+
+/**
+ * Execute a promotion move
+ */
+function executePromotionMove(board: BoardState, move: PromotionMove): BoardState {
+  let newBoard = cloneBoardState(board);
+  
+  const piece = getPieceById(newBoard, move.pieceId);
+  if (!piece) return newBoard;
+  
+  // If capturing during promotion, handle like capture move
+  if (move.capturedPieceId) {
+    const capturedPiece = getPieceById(newBoard, move.capturedPieceId);
+    if (capturedPiece) {
+      // Remove captured piece at target square (unitary capture)
+      if (capturedPiece.superposition[move.to] === 1.0) {
+        newBoard = removePiece(newBoard, move.capturedPieceId);
+      } else {
+        // Partial capture - remove probability at target
+        const newSuperposition: Record<number, number> = {};
+        let hasRemainingProb = false;
+        
+        for (const [square, prob] of Object.entries(capturedPiece.superposition)) {
+          const sq = parseInt(square);
+          if (sq !== move.to) {
+            newSuperposition[sq] = prob;
+            hasRemainingProb = true;
+          }
+        }
+        
+        if (hasRemainingProb) {
+          newBoard = updatePieceSuperposition(newBoard, move.capturedPieceId, newSuperposition);
+        } else {
+          newBoard = removePiece(newBoard, move.capturedPieceId);
+        }
+      }
+    }
+  }
+  
+  // Move the pawn to promotion square (similar to normal move)
+  const newSuperposition = moveProbability(piece, move.from, move.to);
+  newBoard = updatePieceSuperposition(newBoard, move.pieceId, newSuperposition);
+  
+  // Update existing entanglements if piece was already entangled
+  if (isPieceEntangled(newBoard, move.pieceId)) {
+    newBoard = updateEntanglementsAfterMove(newBoard, move.pieceId, move.from, move.to);
+  }
+  
+  // Change the piece type to the promoted piece
+  // Find the piece in the board and update its type
+  const pieceIndex = newBoard.pieces.findIndex(p => p.id === move.pieceId);
+  if (pieceIndex !== -1) {
+    newBoard.pieces[pieceIndex] = {
+      ...newBoard.pieces[pieceIndex],
+      type: move.promoteTo,
+    };
+  }
+  
+  // Clear en passant
+  newBoard = setEnPassantTarget(newBoard, null);
   
   return newBoard;
 }
