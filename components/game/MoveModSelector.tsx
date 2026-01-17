@@ -2,7 +2,6 @@
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { useState } from 'react';
 
 export type MoveMode = 'classic' | 'split' | 'merge';
 
@@ -17,6 +16,7 @@ export function MoveModSelector({ mode, onModeChange }: ModeSelectProps) {
       <Button
         variant={mode === 'classic' ? 'default' : 'outline'}
         size="sm"
+        className='hover:cursor-pointer hover:text-primary'
         onClick={() => onModeChange('classic')}
       >
         Classic
@@ -24,6 +24,7 @@ export function MoveModSelector({ mode, onModeChange }: ModeSelectProps) {
       <Button
         variant={mode === 'split' ? 'default' : 'outline'}
         size="sm"
+        className='hover:cursor-pointer hover:text-primary'
         onClick={() => onModeChange('split')}
       >
         Split
@@ -31,6 +32,7 @@ export function MoveModSelector({ mode, onModeChange }: ModeSelectProps) {
       <Button
         variant={mode === 'merge' ? 'default' : 'outline'}
         size="sm"
+        className='hover:cursor-pointer hover:text-primary'
         onClick={() => onModeChange('merge')}
       >
         Merge

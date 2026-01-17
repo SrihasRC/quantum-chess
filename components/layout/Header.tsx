@@ -29,19 +29,19 @@ export function Header() {
           <div className="flex items-center gap-2">
             {isSandbox ? (
               <Link href="/">
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className='hover:cursor-pointer hover:text-accent'>
                   ← Game Mode
                 </Button>
               </Link>
             ) : (
               <Link href="/sandbox">
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className='hover:cursor-pointer hover:text-accent'>
                   🧪 Sandbox
                 </Button>
               </Link>
             )}
-            <Button onClick={newGame} variant="outline" size="sm">
-              {isSandbox ? 'Clear Board' : 'New Game'}
+            <Button onClick={newGame} variant="outline" size="sm" className='hover:cursor-pointer hover:text-accent'>
+              {isSandbox ? 'Reset' : 'New Game'}
             </Button>
           </div>
         </div>

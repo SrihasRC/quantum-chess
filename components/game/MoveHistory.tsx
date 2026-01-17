@@ -64,7 +64,7 @@ export function MoveHistory() {
           size="sm"
           onClick={undoMove}
           disabled={!canUndo}
-          className="h-7 px-2"
+          className="h-7 px-2 hover:cursor-pointer hover:text-accent"
           title="Undo last move"
         >
           <Undo2 className="h-3.5 w-3.5" />
@@ -78,7 +78,7 @@ export function MoveHistory() {
           size="sm"
           onClick={goToFirst}
           disabled={isAtStart}
-          className="h-7 px-2 flex-1"
+          className="h-7 px-2 flex-1 hover:cursor-pointer hover:text-accent"
           title="Go to start"
         >
           <ChevronsLeft className="h-3.5 w-3.5" />
@@ -88,7 +88,7 @@ export function MoveHistory() {
           size="sm"
           onClick={goToPrevious}
           disabled={isAtStart}
-          className="h-7 px-2 flex-1"
+          className="h-7 px-2 flex-1 hover:cursor-pointer hover:text-accent"
           title="Previous move"
         >
           <ChevronLeft className="h-3.5 w-3.5" />
@@ -98,7 +98,7 @@ export function MoveHistory() {
           size="sm"
           onClick={goToNext}
           disabled={isAtEnd}
-          className="h-7 px-2 flex-1"
+          className="h-7 px-2 flex-1 hover:cursor-pointer hover:text-accent"
           title="Next move"
         >
           <ChevronRight className="h-3.5 w-3.5" />
@@ -108,7 +108,7 @@ export function MoveHistory() {
           size="sm"
           onClick={goToLast}
           disabled={isAtEnd}
-          className="h-7 px-2 flex-1"
+          className="h-7 px-2 flex-1 hover:cursor-pointer hover:text-accent"
           title="Go to latest"
         >
           <ChevronsRight className="h-3.5 w-3.5" />

@@ -287,7 +287,7 @@ export default function SandboxPage() {
               }} 
               variant={deleteMode ? "destructive" : "outline"}
               size="sm" 
-              className="w-full"
+              className="w-full hover:cursor-pointer hover:text-accent"
             >
               <Trash2 className="h-4 w-4 mr-2" />
               {deleteMode ? "Delete Mode: ON" : "Delete Mode"}
@@ -296,7 +296,7 @@ export default function SandboxPage() {
               onClick={() => setFlipped(!flipped)} 
               variant="outline" 
               size="sm" 
-              className="w-full"
+              className="w-full hover:cursor-pointer hover:text-accent"
             >
               <FlipVertical className="h-4 w-4 mr-2" />
               Flip Board
@@ -305,25 +305,25 @@ export default function SandboxPage() {
               onClick={undoMove} 
               variant="outline" 
               size="sm" 
-              className="w-full"
+              className="w-full hover:cursor-pointer hover:text-accent"
             >
               Undo Move
             </Button>
-            <Button onClick={handleClearBoard} variant="destructive" size="sm" className="w-full">
+            <Button onClick={handleClearBoard} variant="destructive" size="sm" className="w-full hover:cursor-pointer hover:text-accent">
               Clear Board
             </Button>
             <Button
               onClick={() => useGameStore.getState().newGame()}
               variant="outline"
               size="sm"
-              className="w-full"
+              className="w-full hover:cursor-pointer hover:text-accent"
             >
               Reset to Initial
             </Button>
-            <Button onClick={handleExportBoard} variant="outline" size="sm" className="w-full">
+            <Button onClick={handleExportBoard} variant="outline" size="sm" className="w-full hover:cursor-pointer hover:text-accent">
               Export JSON
             </Button>
-            <Button onClick={handleImportBoard} variant="outline" size="sm" className="w-full">
+            <Button onClick={handleImportBoard} variant="outline" size="sm" className="w-full hover:cursor-pointer hover:text-accent">
               Import JSON
             </Button>
             <div className="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded">
