@@ -24,6 +24,7 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
   const currentMoveIndex = useGameStore((state) => state.currentMoveIndex);
   const moveHistory = useGameStore((state) => state.moveHistory);
   const promotionPending = useGameStore((state) => state.promotionPending);
+  const sandboxMode = useGameStore((state) => state.sandboxMode);
   const selectPiece = useGameStore((state) => state.selectPiece);
   const movePiece = useGameStore((state) => state.movePiece);
   const selectPromotionPiece = useGameStore((state) => state.selectPromotionPiece);
@@ -84,14 +85,18 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
       // If no classical piece, check for superposed pieces
       if (!piece) {
         const superposedPieces = getPiecesAtSquare(board, square);
-        const playerSuperposedPieces = superposedPieces.filter(p => p.color === board.activeColor);
+        // In sandbox mode, allow any piece; in normal mode, filter by active color
+        const relevantPieces = sandboxMode
+          ? superposedPieces
+          : superposedPieces.filter(p => p.color === board.activeColor);
         
-        if (playerSuperposedPieces.length > 0) {
-          piece = playerSuperposedPieces[0];
+        if (relevantPieces.length > 0) {
+          piece = relevantPieces[0];
         }
       }
       
-      if (piece && piece.color === board.activeColor) {
+      // In sandbox mode, allow selecting any piece; in normal mode, only current player's pieces
+      if (piece && (sandboxMode || piece.color === board.activeColor)) {
         setSplitSource(square);
       }
     } else if (splitTargets.length < 2) {
@@ -107,10 +112,13 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
           
           if (!piece) {
             const superposedPieces = getPiecesAtSquare(board, splitSource);
-            const playerSuperposedPieces = superposedPieces.filter(p => p.color === board.activeColor);
+            // In sandbox mode, allow any piece; in normal mode, filter by active color
+            const relevantPieces = sandboxMode
+              ? superposedPieces
+              : superposedPieces.filter(p => p.color === board.activeColor);
             
-            if (playerSuperposedPieces.length > 0) {
-              piece = playerSuperposedPieces[0];
+            if (relevantPieces.length > 0) {
+              piece = relevantPieces[0];
             }
           }
           
@@ -123,8 +131,8 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
               to2: newTargets[1],
             };
             
-            // Validate the move before executing
-            const validation = validateMove(board, splitMove);
+            // Validate the move before executing (pass sandboxMode)
+            const validation = validateMove(board, splitMove, sandboxMode);
             
             if (validation.isLegal) {
               movePiece(splitMove);
@@ -242,8 +250,8 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
           to: square,
         };
         
-        // Validate before executing
-        const validation = validateMove(board, mergeMove);
+        // Validate before executing (pass sandboxMode)
+        const validation = validateMove(board, mergeMove, sandboxMode);
         if (validation.isLegal) {
           movePiece(mergeMove);
           
