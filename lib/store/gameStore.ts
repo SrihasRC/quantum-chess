@@ -278,7 +278,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       
       // For PAWN captures only: Also measure target if in superposition
       // Pawn capture requires BOTH source and target to be occupied (paper section 7.3.1)
-      if (piece && piece.type === 'pawn' && move.capturedPieceId) {
+      if (piece && (piece.type === 'P' || piece.type === 'p') && move.capturedPieceId) {
         let currentBoard = get().board;
         const targetPiece = getPieceById(currentBoard, move.capturedPieceId);
         
@@ -290,7 +290,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             // Measurement failed - target not at capture square
             console.log('Pawn capture measurement failed - target not at capture square');
             toast.info('Capture Failed', {
-              description: `Target piece was not found at ${indexToAlgebraic(move.to)} (${Math.round(probAtTarget * 100)}% chance). Pawn moves to empty diagonal.`,
+              description: `Target piece was not found at ${indexToAlgebraic(move.to)} (${Math.round(probAtTarget * 100)}% chance). Pawn remains in place.`,
             });
             
             // Partial measurement: Remove probability from target square and renormalize
@@ -312,9 +312,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
               currentBoard = removePiece(currentBoard, move.capturedPieceId);
             }
             
-            // Execute as normal move to empty square (pawn diagonal move to empty square is illegal)
-            // In standard chess, pawn can't move diagonally without capture
-            // So we just end the turn with the attacker collapsed
+            // Pawn can't move diagonally without a capture
+            // Pawn stays at its current position (already collapsed to source from earlier measurement)
             const finalBoard = switchTurn(currentBoard);
             set({ 
               board: finalBoard,
