@@ -59,7 +59,9 @@ export function splitMove(
   newSuperposition[toSquare1] = (newSuperposition[toSquare1] || 0) + prob1;
   newSuperposition[toSquare2] = (newSuperposition[toSquare2] || 0) + prob2;
   
-  return normalizeProbabilities(newSuperposition);
+  // DON'T normalize - split is a local operation that only affects the source square
+  // Other superposition positions should remain unchanged
+  return newSuperposition;
 }
 
 // Merge Move - Combine Superposition

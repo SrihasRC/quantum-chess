@@ -1055,6 +1055,9 @@ function executeSplitMove(board: BoardState, move: SplitMove): BoardState {
     
     console.log('Creating split entanglement with blockers:', blockingPieceIds);
     
+    // Get the probability amplitude at the source square
+    const sourceProb = piece.superposition[move.from] || 0;
+    
     const result = createSplitEntanglement(
       newBoard,
       move.pieceId,
@@ -1072,8 +1075,43 @@ function executeSplitMove(board: BoardState, move: SplitMove): BoardState {
     if (result.entanglement) {
       // Update board from entanglement first
       newBoard = result.board;
+      
+      // Special handling: Only preserve the MOVING PIECE's other positions
+      // The blocker pieces are fully enumerated in the joint distribution,
+      // so their positions should NOT be preserved separately
+      const originalPiece = getPieceById(board, move.pieceId);
+      const otherPositions: Record<number, number> = {};
+      if (originalPiece) {
+        for (const [sq, prob] of Object.entries(originalPiece.superposition)) {
+          const square = parseInt(sq);
+          if (square !== move.from) {
+            otherPositions[square] = prob;
+          }
+        }
+      }
+      
       // Then update piece probabilities from joint distribution
       newBoard = updatePiecesFromEntanglement(newBoard, result.entanglement);
+      
+      // Scale the moving piece's entangled positions by sourceProb
+      // (blocker pieces keep full probability from marginalization)
+      const updatedPiece = getPieceById(newBoard, move.pieceId);
+      if (updatedPiece) {
+        const scaledSuperposition: Record<number, number> = {};
+        for (const [sq, prob] of Object.entries(updatedPiece.superposition)) {
+          const square = parseInt(sq);
+          scaledSuperposition[square] = prob * sourceProb;
+        }
+        
+        // Add back the other positions that weren't part of the split
+        for (const [sq, prob] of Object.entries(otherPositions)) {
+          const square = parseInt(sq);
+          scaledSuperposition[square] = (scaledSuperposition[square] || 0) + prob;
+        }
+        
+        newBoard = updatePieceSuperposition(newBoard, move.pieceId, scaledSuperposition);
+      }
+      
       console.log('Updated board after entanglement:', newBoard.pieces.find(p => p.id === move.pieceId));
     } else {
       newBoard = result.board;
