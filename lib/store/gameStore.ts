@@ -828,38 +828,73 @@ function executeCaptureMove(board: BoardState, move: NormalMove): BoardState {
   const piece = getPieceById(newBoard, move.pieceId);
   if (!piece) return newBoard;
   
-  // Check for path entanglement (if sliding piece)
+  // Check for path blockers (if sliding piece)
   if (isSlidingMove(piece.type, move.from, move.to)) {
     const pathSquares = getSquaresBetween(move.from, move.to);
     if (pathSquares.length > 0) {
       const blockers = getBlockingPiecesInPath(newBoard, pathSquares, move.pieceId);
       
       if (blockers.length > 0) {
-        // TODO: Edge case - if moving piece is ALREADY entangled, this creates multi-piece entanglement
-        if (isPieceEntangled(newBoard, move.pieceId)) {
-          console.warn('[executeCaptureMove] Creating new entanglement while piece already entangled - multi-piece entanglement not fully supported');
-        }
-        
+        // For captures through superposed blockers, we must MEASURE the blocker
+        // Cannot create entanglement because target square is already occupied
+        // If blocker is present → move fails (return unchanged board)
+        // If blocker is absent → proceed with capture
         const blocker = blockers[0];
-        const result = createMoveEntanglement(
-          newBoard,
-          move.pieceId,
-          move.from,
-          move.to,
-          blocker.pieceId,
-          blocker.square,
-          blocker.probability
-        );
+        const blockingSquare = blocker.square;
+        const blockerPiece = getPieceById(newBoard, blocker.pieceId);
         
-        newBoard = result.board;
+        if (!blockerPiece) return newBoard;
         
-        if (result.entanglement) {
-          newBoard = updatePiecesFromEntanglement(newBoard, result.entanglement);
+        // Measure if the blocker is at the blocking square
+        const probBlockerPresent = blockerPiece.superposition[blockingSquare] || 0;
+        
+        // Perform measurement
+        const measurementResult = Math.random() < probBlockerPresent;
+        
+        if (measurementResult) {
+          // Blocker is present - capture fails, path is blocked
+          // Collapse blocker to the blocking square
+          newBoard = updatePieceSuperposition(newBoard, blocker.pieceId, {
+            [blockingSquare]: 1.0,
+          });
+          
+          // Move fails - return board with only the blocker measurement
+          return newBoard;
+        } else {
+          // Blocker is absent - remove probability from blocking square
+          // and renormalize the blocker's other positions
+          const newBlockerSuperposition: Record<number, number> = {};
+          let totalRemainingProb = 0;
+          
+          for (const [square, prob] of Object.entries(blockerPiece.superposition)) {
+            const sq = parseInt(square);
+            if (sq !== blockingSquare) {
+              newBlockerSuperposition[sq] = prob;
+              totalRemainingProb += prob;
+            }
+          }
+          
+          // Renormalize remaining positions
+          if (totalRemainingProb > 0) {
+            for (const sq in newBlockerSuperposition) {
+              newBlockerSuperposition[sq] /= totalRemainingProb;
+            }
+            newBoard = updatePieceSuperposition(newBoard, blocker.pieceId, newBlockerSuperposition);
+          } else {
+            // Blocker had no other positions - remove it
+            newBoard = removePiece(newBoard, blocker.pieceId);
+          }
+          
+          // Continue with unitary capture below
         }
-      } else {
-        // No blockers - unitary capture: move probability amplitude from->to
-        // This preserves superposition structure (no collapse)
-        const newSuperposition: Record<number, number> = { ...piece.superposition };
+      }
+      
+      // No blockers or blocker measured absent - unitary capture: move probability amplitude from->to
+      // This preserves superposition structure (no collapse)
+      // Get the updated piece after potential blocker measurement
+      const movingPiece = getPieceById(newBoard, move.pieceId);
+      if (movingPiece) {
+        const newSuperposition: Record<number, number> = { ...movingPiece.superposition };
         const probAtSource = newSuperposition[move.from] || 0;
         delete newSuperposition[move.from];
         newSuperposition[move.to] = (newSuperposition[move.to] || 0) + probAtSource;
