@@ -44,6 +44,7 @@ import {
   isPieceEntangled,
   removeEntanglement,
   collapseEntanglements,
+  collapseEntangledMeasurement,
   parseJointKey,
   createJointKey,
 } from '@/lib/engine/quantum';
@@ -200,11 +201,57 @@ export const useGameStore = create<GameStore>((set, get) => ({
                   }
                   currentBoard = updatePieceSuperposition(currentBoard, move.pieceId, newSuperposition);
                   
-                  // If piece collapsed to a single square, collapse entanglements
-                  const squares = Object.keys(newSuperposition);
-                  if (squares.length === 1) {
-                    const collapsedSquare = parseInt(squares[0]);
-                    currentBoard = collapseEntanglements(currentBoard, move.pieceId, collapsedSquare);
+                  // Update entanglements based on measurement outcome
+                  if (isPieceEntangled(currentBoard, move.pieceId)) {
+                    console.log(`Pawn ${move.pieceId} is entangled, updating all entangled pieces based on measurement failure`);
+                    
+                    // Identify entangled positions
+                    const entanglement = currentBoard.entanglements?.find(e => e.pieceIds.includes(move.pieceId));
+                    const entangledPositions = new Set<number>();
+                    if (entanglement) {
+                      for (const key of Object.keys(entanglement.jointStates)) {
+                        const positions = parseJointKey(key);
+                        const pos = positions.get(move.pieceId);
+                        if (pos !== undefined) {
+                          entangledPositions.add(pos);
+                        }
+                      }
+                    }
+                    
+                    // Calculate entangled fraction
+                    let entangledProbTotal = 0;
+                    const nonEntangledPositions: Record<number, number> = {};
+                    for (const [sq, prob] of Object.entries(newSuperposition)) {
+                      const square = parseInt(sq);
+                      if (entangledPositions.has(square)) {
+                        entangledProbTotal += prob;
+                      } else {
+                        nonEntangledPositions[square] = prob;
+                      }
+                    }
+                    
+                    // Collapse entanglement
+                    currentBoard = collapseEntangledMeasurement(currentBoard, move.pieceId, move.from, false);
+                    
+                    // Scale and combine
+                    const updatedPiece = getPieceById(currentBoard, move.pieceId);
+                    if (updatedPiece) {
+                      const combinedSuperposition: Record<number, number> = {};
+                      
+                      // Scale entangled marginals
+                      for (const [sq, prob] of Object.entries(updatedPiece.superposition)) {
+                        const square = parseInt(sq);
+                        combinedSuperposition[square] = prob * entangledProbTotal;
+                      }
+                      
+                      // Add non-entangled
+                      for (const [sq, prob] of Object.entries(nonEntangledPositions)) {
+                        const square = parseInt(sq);
+                        combinedSuperposition[square] = (combinedSuperposition[square] || 0) + prob;
+                      }
+                      
+                      currentBoard = updatePieceSuperposition(currentBoard, move.pieceId, combinedSuperposition);
+                    }
                   }
                 } else {
                   currentBoard = removePiece(currentBoard, move.pieceId);
@@ -358,14 +405,61 @@ export const useGameStore = create<GameStore>((set, get) => ({
             }
             currentBoard = updatePieceSuperposition(currentBoard, move.pieceId, newSuperposition);
             
-            // If piece collapsed to a single square, collapse entanglements
-            const squares = Object.keys(newSuperposition);
-            if (squares.length === 1) {
-              const collapsedSquare = parseInt(squares[0]);
-              console.log(`Piece ${move.pieceId} collapsed to square ${collapsedSquare}, collapsing entanglements...`);
-              currentBoard = collapseEntanglements(currentBoard, move.pieceId, collapsedSquare);
-              console.log('After collapse, board entanglements:', currentBoard.entanglements);
-              console.log('After collapse, all pieces:', currentBoard.pieces.map(p => ({ id: p.id, superposition: p.superposition })));
+            // Update entanglements based on measurement outcome
+            if (isPieceEntangled(currentBoard, move.pieceId)) {
+              console.log(`Piece ${move.pieceId} is entangled, updating all entangled pieces based on measurement failure`);
+              
+              // Identify which positions are part of the entanglement
+              const entanglement = currentBoard.entanglements?.find(e => e.pieceIds.includes(move.pieceId));
+              const entangledPositions = new Set<number>();
+              if (entanglement) {
+                for (const key of Object.keys(entanglement.jointStates)) {
+                  const positions = parseJointKey(key);
+                  const pos = positions.get(move.pieceId);
+                  if (pos !== undefined) {
+                    entangledPositions.add(pos);
+                  }
+                }
+              }
+              
+              // Calculate what fraction of the piece's probability is entangled
+              let entangledProbTotal = 0;
+              const nonEntangledPositions: Record<number, number> = {};
+              for (const [sq, prob] of Object.entries(newSuperposition)) {
+                const square = parseInt(sq);
+                if (entangledPositions.has(square)) {
+                  entangledProbTotal += prob;
+                } else {
+                  nonEntangledPositions[square] = prob;
+                }
+              }
+              
+              console.log(`Entangled fraction: ${entangledProbTotal}, non-entangled:`, nonEntangledPositions);
+              
+              // Collapse entanglement (updates all entangled pieces, returns normalized marginals)
+              currentBoard = collapseEntangledMeasurement(currentBoard, move.pieceId, move.from, false);
+              
+              // Scale the entangled marginals and add back non-entangled positions
+              const updatedPiece = getPieceById(currentBoard, move.pieceId);
+              if (updatedPiece) {
+                const combinedSuperposition: Record<number, number> = {};
+                
+                // Scale entangled marginals by the fraction that was entangled
+                for (const [sq, prob] of Object.entries(updatedPiece.superposition)) {
+                  const square = parseInt(sq);
+                  combinedSuperposition[square] = prob * entangledProbTotal;
+                }
+                
+                // Add back non-entangled positions
+                for (const [sq, prob] of Object.entries(nonEntangledPositions)) {
+                  const square = parseInt(sq);
+                  combinedSuperposition[square] = (combinedSuperposition[square] || 0) + prob;
+                }
+                
+                currentBoard = updatePieceSuperposition(currentBoard, move.pieceId, combinedSuperposition);
+              }
+              
+              console.log('After entanglement update, all pieces:', currentBoard.pieces.map(p => ({ id: p.id, superposition: p.superposition })));
             }
           } else {
             currentBoard = removePiece(currentBoard, move.pieceId);
@@ -429,11 +523,57 @@ export const useGameStore = create<GameStore>((set, get) => ({
               }
               currentBoard = updatePieceSuperposition(currentBoard, move.capturedPieceId, newSuperposition);
               
-              // If target piece collapsed to a single square, collapse entanglements
-              const squares = Object.keys(newSuperposition);
-              if (squares.length === 1) {
-                const collapsedSquare = parseInt(squares[0]);
-                currentBoard = collapseEntanglements(currentBoard, move.capturedPieceId, collapsedSquare);
+              // Update entanglements based on measurement outcome
+              if (move.capturedPieceId && isPieceEntangled(currentBoard, move.capturedPieceId)) {
+                console.log(`Target piece ${move.capturedPieceId} is entangled, updating all entangled pieces based on measurement failure`);
+                
+                // Identify entangled positions
+                const entanglement = currentBoard.entanglements?.find(e => e.pieceIds.includes(move.capturedPieceId!));
+                const entangledPositions = new Set<number>();
+                if (entanglement) {
+                  for (const key of Object.keys(entanglement.jointStates)) {
+                    const positions = parseJointKey(key);
+                    const pos = positions.get(move.capturedPieceId!);
+                    if (pos !== undefined) {
+                      entangledPositions.add(pos);
+                    }
+                  }
+                }
+                
+                // Calculate entangled fraction
+                let entangledProbTotal = 0;
+                const nonEntangledPositions: Record<number, number> = {};
+                for (const [sq, prob] of Object.entries(newSuperposition)) {
+                  const square = parseInt(sq);
+                  if (entangledPositions.has(square)) {
+                    entangledProbTotal += prob;
+                  } else {
+                    nonEntangledPositions[square] = prob;
+                  }
+                }
+                
+                // Collapse entanglement
+                currentBoard = collapseEntangledMeasurement(currentBoard, move.capturedPieceId, move.to, false);
+                
+                // Scale and combine
+                const updatedPiece = getPieceById(currentBoard, move.capturedPieceId);
+                if (updatedPiece) {
+                  const combinedSuperposition: Record<number, number> = {};
+                  
+                  // Scale entangled marginals
+                  for (const [sq, prob] of Object.entries(updatedPiece.superposition)) {
+                    const square = parseInt(sq);
+                    combinedSuperposition[square] = prob * entangledProbTotal;
+                  }
+                  
+                  // Add non-entangled
+                  for (const [sq, prob] of Object.entries(nonEntangledPositions)) {
+                    const square = parseInt(sq);
+                    combinedSuperposition[square] = (combinedSuperposition[square] || 0) + prob;
+                  }
+                  
+                  currentBoard = updatePieceSuperposition(currentBoard, move.capturedPieceId, combinedSuperposition);
+                }
               }
             } else {
               currentBoard = removePiece(currentBoard, move.capturedPieceId);
