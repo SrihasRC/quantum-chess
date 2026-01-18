@@ -63,8 +63,8 @@ export function generateLegalMoves(
       moves.push(...generateCastlingMoves(board, piece, fromSquare));
     }
     
-    // En passant (if pawn and certain at source)
-    if (piece.type === 'P' && board.enPassantTarget && piece.superposition[fromSquare] === 1.0) {
+    // En passant (if pawn - allow even for superposed pawns)
+    if (piece.type === 'P' && board.enPassantTarget) {
       const epMove = generateEnPassantMove(board, piece, fromSquare);
       if (epMove) moves.push(epMove);
     }

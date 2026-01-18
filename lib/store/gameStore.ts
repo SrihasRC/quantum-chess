@@ -17,6 +17,7 @@ import type {
   PromotionMove,
   CastlingMove,
   QuantumPiece,
+  EnPassantMove,
 } from '@/lib/types';
 import {
   createInitialBoardState,
@@ -653,10 +654,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
         notation = move.side === 'kingside' ? 'O-O' : 'O-O-O';
         break;
         
-      // TODO: Implement en passant
-      default:
-        console.warn('Move type not yet implemented:', move.type);
-        return;
+      case 'en-passant':
+        newBoard = executeEnPassantMove(newBoard, move);
+        notation = `${indexToAlgebraic(move.from)}x${indexToAlgebraic(move.to)} e.p.`;
+        break;
     }
     
     // Switch turn (unless in sandbox mode)
@@ -1804,6 +1805,181 @@ function executeCastlingMove(board: BoardState, move: CastlingMove): BoardState 
   newBoard = setEnPassantTarget(newBoard, null);
   
   console.log('[executeCastlingMove] Castling completed successfully');
+  
+  return newBoard;
+}
+
+/**
+ * Execute en passant move
+ * Per paper section 8.4: En passant is a special pawn capture with 3 variants in quantum chess
+ * This implements basic en passant with measurement
+ */
+function executeEnPassantMove(board: BoardState, move: EnPassantMove): BoardState {
+  let newBoard = cloneBoardState(board);
+  
+  const pawn = getPieceById(newBoard, move.pieceId);
+  if (!pawn) return newBoard;
+  
+  const capturedPawn = getPieceById(newBoard, move.capturedPieceId);
+  if (!capturedPawn) return newBoard;
+  
+  // En passant captures a pawn that just moved two squares
+  // move.to is the square the capturing pawn moves to (behind the enemy pawn)
+  // move.capturedPawnSquare is where the enemy pawn currently is
+  
+  console.log(`[executeEnPassantMove] Pawn ${pawn.id} capturing ${capturedPawn.id} via en passant`);
+  console.log(`  Moving pawn: ${indexToAlgebraic(move.from)} → ${indexToAlgebraic(move.to)}`);
+  console.log(`  Captured pawn at: ${indexToAlgebraic(move.capturedPawnSquare)}`);
+  
+  // Check if capturing pawn is in superposition
+  const probAtSource = pawn.superposition[move.from] || 0;
+  
+  if (probAtSource !== 1.0) {
+    // Pawn is in superposition - measure it at source
+    console.log(`[executeEnPassantMove] Measuring pawn at source (${Math.round(probAtSource * 100)}% probability)`);
+    
+    const measurementResult = Math.random() < probAtSource;
+    
+    if (!measurementResult) {
+      // Measurement failed - pawn not at source
+      toast.error('Measurement Failed', {
+        description: `Your pawn was not found at ${indexToAlgebraic(move.from)}. Turn lost.`,
+      });
+      
+      // Remove probability from source and renormalize
+      const newSuperposition: Record<number, number> = {};
+      let totalProb = 0;
+      
+      for (const [square, prob] of Object.entries(pawn.superposition)) {
+        const sq = parseInt(square);
+        if (sq !== move.from) {
+          newSuperposition[sq] = prob;
+          totalProb += prob;
+        }
+      }
+      
+      if (totalProb > 0) {
+        for (const sq in newSuperposition) {
+          newSuperposition[sq] /= totalProb;
+        }
+        newBoard = updatePieceSuperposition(newBoard, move.pieceId, newSuperposition);
+        
+        // Handle entanglement if needed
+        if (isPieceEntangled(newBoard, move.pieceId)) {
+          newBoard = collapseEntangledMeasurement(newBoard, move.pieceId, move.from, false);
+        }
+      } else {
+        newBoard = removePiece(newBoard, move.pieceId);
+      }
+      
+      // Clear en passant target
+      newBoard = setEnPassantTarget(newBoard, null);
+      
+      return newBoard;
+    }
+    
+    // Measurement succeeded - collapse pawn to source
+    console.log('[executeEnPassantMove] Measurement succeeded, collapsing pawn to source');
+    newBoard = updatePieceSuperposition(newBoard, move.pieceId, { [move.from]: 1.0 });
+    if (isPieceEntangled(newBoard, move.pieceId)) {
+      newBoard = collapseEntangledMeasurement(newBoard, move.pieceId, move.from, true);
+    }
+  }
+  
+  // Get the updated pawn after potential collapse
+  const updatedPawn = getPieceById(newBoard, move.pieceId);
+  if (!updatedPawn) return newBoard;
+  
+  // Check if target square is occupied (could be entangled with captured pawn)
+  const pieceAtTarget = getPieceAt(newBoard, move.to);
+  
+  if (pieceAtTarget && pieceAtTarget.id !== move.capturedPieceId) {
+    // Target square is occupied by another piece - need to measure
+    console.log(`[executeEnPassantMove] Target square occupied by ${pieceAtTarget.type}, measuring...`);
+    
+    const probAtTarget = pieceAtTarget.superposition[move.to] || 0;
+    const measurementResult = Math.random() < probAtTarget;
+    
+    if (measurementResult) {
+      // Target is occupied - en passant fails
+      toast.error('En Passant Blocked', {
+        description: `Target square ${indexToAlgebraic(move.to)} is occupied. Move fails.`,
+      });
+      
+      // Collapse blocking piece to target
+      newBoard = updatePieceSuperposition(newBoard, pieceAtTarget.id, { [move.to]: 1.0 });
+      if (isPieceEntangled(newBoard, pieceAtTarget.id)) {
+        newBoard = collapseEntangledMeasurement(newBoard, pieceAtTarget.id, move.to, true);
+      }
+      
+      // Clear en passant target
+      newBoard = setEnPassantTarget(newBoard, null);
+      
+      return newBoard;
+    }
+    
+    // Target is clear - renormalize blocking piece
+    console.log('[executeEnPassantMove] Target clear, proceeding with en passant');
+    const newSuperposition: Record<number, number> = {};
+    let totalProb = 0;
+    
+    for (const [square, prob] of Object.entries(pieceAtTarget.superposition)) {
+      const sq = parseInt(square);
+      if (sq !== move.to) {
+        newSuperposition[sq] = prob;
+        totalProb += prob;
+      }
+    }
+    
+    if (totalProb > 0) {
+      for (const sq in newSuperposition) {
+        newSuperposition[sq] /= totalProb;
+      }
+      newBoard = updatePieceSuperposition(newBoard, pieceAtTarget.id, newSuperposition);
+      
+      if (isPieceEntangled(newBoard, pieceAtTarget.id)) {
+        newBoard = collapseEntangledMeasurement(newBoard, pieceAtTarget.id, move.to, false);
+      }
+    } else {
+      newBoard = removePiece(newBoard, pieceAtTarget.id);
+    }
+  }
+  
+  // Execute the en passant capture
+  // Move the capturing pawn to the target square (use updated pawn after measurement)
+  const newPawnSuperposition = moveProbability(updatedPawn, move.from, move.to);
+  newBoard = updatePieceSuperposition(newBoard, move.pieceId, newPawnSuperposition);
+  
+  // Remove the captured pawn
+  // Per paper: This is a unitary capture (removes amplitude without measurement)
+  if (capturedPawn.superposition[move.capturedPawnSquare] === 1.0) {
+    // Captured pawn is certain at the square - full capture
+    newBoard = removePiece(newBoard, move.capturedPieceId);
+  } else {
+    // Captured pawn is in superposition - remove probability at captured square
+    const newCapturedSuperposition: Record<number, number> = {};
+    let hasRemainingProb = false;
+    
+    for (const [square, prob] of Object.entries(capturedPawn.superposition)) {
+      const sq = parseInt(square);
+      if (sq !== move.capturedPawnSquare) {
+        newCapturedSuperposition[sq] = prob;
+        hasRemainingProb = true;
+      }
+    }
+    
+    // Do NOT renormalize - this is unitary removal of amplitude
+    if (hasRemainingProb) {
+      newBoard = updatePieceSuperposition(newBoard, move.capturedPieceId, newCapturedSuperposition);
+    } else {
+      newBoard = removePiece(newBoard, move.capturedPieceId);
+    }
+  }
+  
+  // Clear en passant target
+  newBoard = setEnPassantTarget(newBoard, null);
+  
+  console.log('[executeEnPassantMove] En passant completed successfully');
   
   return newBoard;
 }
