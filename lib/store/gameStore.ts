@@ -15,6 +15,8 @@ import type {
   SplitMove,
   MergeMove,
   PromotionMove,
+  CastlingMove,
+  QuantumPiece,
 } from '@/lib/types';
 import {
   createInitialBoardState,
@@ -161,6 +163,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (state.selectedSquare !== null) {
       const move = state.legalMoves.find(m => {
         if (m.type === 'normal' || m.type === 'capture' || m.type === 'promotion') {
+          return m.to === square;
+        }
+        if (m.type === 'castling') {
+          return m.to === square;
+        }
+        if (m.type === 'en-passant') {
           return m.to === square;
         }
         return false;
@@ -326,6 +334,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (selectedPieceId === pieceAtSquare.id) {
         const move = state.legalMoves.find(m => {
           if (m.type === 'normal' || m.type === 'capture') {
+            return m.to === square;
+          }
+          if (m.type === 'castling') {
+            return m.to === square;
+          }
+          if (m.type === 'promotion') {
+            return m.to === square;
+          }
+          if (m.type === 'en-passant') {
             return m.to === square;
           }
           return false;
@@ -631,7 +648,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
         notation = `${indexToAlgebraic(move.from)}${indexToAlgebraic(move.to)}${move.promoteTo}${move.capturedPieceId ? 'x' : ''}`;
         break;
         
-      // TODO: Implement castling, en passant
+      case 'castling':
+        newBoard = executeCastlingMove(newBoard, move);
+        notation = move.side === 'kingside' ? 'O-O' : 'O-O-O';
+        break;
+        
+      // TODO: Implement en passant
       default:
         console.warn('Move type not yet implemented:', move.type);
         return;
@@ -1624,6 +1646,164 @@ function executePromotionMove(board: BoardState, move: PromotionMove): BoardStat
   
   // Clear en passant
   newBoard = setEnPassantTarget(newBoard, null);
+  
+  return newBoard;
+}
+
+/**
+ * Execute castling move
+ * Per paper section 8: Castling is a classical move requiring measurement
+ * of intermediate squares to ensure they're empty before executing.
+ */
+function executeCastlingMove(board: BoardState, move: CastlingMove): BoardState {
+  let newBoard = cloneBoardState(board);
+  
+  const king = getPieceById(newBoard, move.pieceId);
+  if (!king) return newBoard;
+  
+  const rook = getPieceAt(newBoard, move.rookFrom);
+  if (!rook) return newBoard;
+  
+  // Determine squares that must be empty for castling
+  // Kingside: f and g (between e and g for king)
+  // Queenside: b, c, d (between e and c for king, and between a and d for rook)
+  const emptySquares: SquareIndex[] = [];
+  
+  if (move.side === 'kingside') {
+    // For white: f1(5), g1(6)
+    // For black: f8(61), g8(62)
+    const rank = king.color === 'white' ? 0 : 7;
+    emptySquares.push(5 + rank * 8, 6 + rank * 8); // f and g
+  } else {
+    // For white: b1(1), c1(2), d1(3)
+    // For black: b8(57), c8(58), d8(59)
+    const rank = king.color === 'white' ? 0 : 7;
+    emptySquares.push(1 + rank * 8, 2 + rank * 8, 3 + rank * 8); // b, c, d
+  }
+  
+  // Check if any pieces are in superposition at the empty squares
+  // Per paper: Must measure to ensure squares are empty (M₀ = occupied, M₁ = empty)
+  const piecesInPath: { piece: QuantumPiece; square: SquareIndex; probability: number }[] = [];
+  
+  for (const piece of newBoard.pieces) {
+    if (piece.id === king.id || piece.id === rook.id) continue; // Skip king and rook
+    
+    for (const square of emptySquares) {
+      const prob = piece.superposition[square];
+      if (prob && prob > 0) {
+        piecesInPath.push({ piece, square, probability: prob });
+      }
+    }
+  }
+  
+  // If any pieces might be in the path, we need to measure
+  if (piecesInPath.length > 0) {
+    console.log(`[executeCastlingMove] Found ${piecesInPath.length} pieces potentially blocking castling path`);
+    
+    // Calculate total probability that path is blocked
+    // For simplicity, we'll check each square independently
+    // A more accurate implementation would consider joint probabilities
+    let pathClearProbability = 1.0;
+    
+    for (const square of emptySquares) {
+      let probOccupied = 0;
+      for (const { piece, square: sq, probability } of piecesInPath) {
+        if (sq === square) {
+          probOccupied += probability;
+        }
+      }
+      pathClearProbability *= (1 - probOccupied);
+    }
+    
+    console.log(`[executeCastlingMove] Path clear probability: ${pathClearProbability}`);
+    
+    // Measure: Is the path clear?
+    const measurementResult = Math.random() < pathClearProbability;
+    
+    if (!measurementResult) {
+      // Path is blocked - castling fails
+      // Collapse all pieces in path to their measured positions
+      console.log('[executeCastlingMove] Path blocked - castling fails');
+      
+      for (const square of emptySquares) {
+        for (const { piece, square: sq } of piecesInPath) {
+          if (sq === square) {
+            // Measure this piece at this square (piece is present)
+            console.log(`[executeCastlingMove] Collapsing ${piece.type} to ${indexToAlgebraic(square)}`);
+            newBoard = updatePieceSuperposition(newBoard, piece.id, { [square]: 1.0 });
+            
+            // If piece was entangled, collapse the entanglement
+            if (isPieceEntangled(newBoard, piece.id)) {
+              newBoard = collapseEntangledMeasurement(newBoard, piece.id, square, true);
+            }
+          }
+        }
+      }
+      
+      return newBoard; // Castling failed, return board with collapsed pieces
+    }
+    
+    // Path is clear - renormalize pieces away from the empty squares
+    console.log('[executeCastlingMove] Path clear - proceeding with castling');
+    
+    for (const { piece } of piecesInPath) {
+      const newSuperposition: Record<number, number> = {};
+      let totalRemainingProb = 0;
+      
+      for (const [square, prob] of Object.entries(piece.superposition)) {
+        const sq = parseInt(square);
+        const probability = typeof prob === 'number' ? prob : parseFloat(prob as string);
+        if (!emptySquares.includes(sq)) {
+          newSuperposition[sq] = probability;
+          totalRemainingProb += probability;
+        }
+      }
+      
+      // Renormalize
+      if (totalRemainingProb > 0) {
+        for (const sq in newSuperposition) {
+          newSuperposition[sq] /= totalRemainingProb;
+        }
+        newBoard = updatePieceSuperposition(newBoard, piece.id, newSuperposition);
+        
+        // If piece was entangled, need to update entanglement
+        if (isPieceEntangled(newBoard, piece.id)) {
+          // For each empty square, collapse the measurement
+          for (const square of emptySquares) {
+            if (piece.superposition[square]) {
+              newBoard = collapseEntangledMeasurement(newBoard, piece.id, square, false);
+            }
+          }
+        }
+      } else {
+        // Piece had no other positions - remove it
+        console.log(`[executeCastlingMove] Removing piece ${piece.id} (no remaining positions)`);
+        newBoard = removePiece(newBoard, piece.id);
+      }
+    }
+  }
+  
+  // Execute the castling move - move both king and rook
+  // Per paper: This is a unitary operation (U_jump for both pieces simultaneously)
+  
+  // Move king
+  const newKingSuperposition = moveProbability(king, move.from, move.to);
+  newBoard = updatePieceSuperposition(newBoard, king.id, newKingSuperposition);
+  
+  // Move rook
+  const newRookSuperposition = moveProbability(rook, move.rookFrom, move.rookTo);
+  newBoard = updatePieceSuperposition(newBoard, rook.id, newRookSuperposition);
+  
+  // Update castling rights - king has moved
+  newBoard = updateCastlingRights(newBoard, king.color, {
+    kingside: false,
+    queenside: false,
+  });
+  
+  // Clear en passant
+  newBoard = setEnPassantTarget(newBoard, null);
+  
+  console.log('[executeCastlingMove] Castling completed successfully');
   
   return newBoard;
 }

@@ -344,6 +344,15 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
       if (move.type === 'normal' || move.type === 'capture') {
         return move.to === square;
       }
+      if (move.type === 'castling') {
+        return move.to === square;
+      }
+      if (move.type === 'promotion') {
+        return move.to === square;
+      }
+      if (move.type === 'en-passant') {
+        return move.to === square;
+      }
       return false;
     });
   };
