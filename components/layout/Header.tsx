@@ -17,8 +17,8 @@ export function Header() {
         <div className="flex items-center justify-between">
           {/* Logo and Title */}
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <Crown className="h-5 w-5 text-primary-foreground" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg">
+              <Crown className="h-5 w-5 text-primary" />
             </div>
             <div>
               <h1 className="text-xl font-bold">Quantum Chess</h1>
