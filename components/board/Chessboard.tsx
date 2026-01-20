@@ -98,6 +98,8 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
       // In sandbox mode, allow selecting any piece; in normal mode, only current player's pieces
       if (piece && (sandboxMode || piece.color === board.activeColor)) {
         setSplitSource(square);
+        // Also select the piece to generate legal moves for highlighting
+        selectPiece(square);
       }
     } else if (splitTargets.length < 2) {
       // Second and third clicks: select targets
@@ -276,25 +278,21 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
     // In split mode, show available split targets based on legal moves
     if (splitMode && splitSource !== null) {
       const piece = getPieceAt(board, splitSource);
-      if (!piece) return false;
-      
-      // Generate legal split moves for this piece
-      const splitMoves = legalMoves.filter(m => m.type === 'split' && (m as { from: number }).from === splitSource);
-      
-      // If we don't have split moves calculated, show all valid move targets
-      if (splitMoves.length === 0) {
-        // Show legal normal move targets as potential split destinations
-        const normalMoves = legalMoves.filter(m => 
-          (m.type === 'normal' || m.type === 'capture') && (m as { from: number }).from === splitSource
-        );
-        return normalMoves.some(m => (m as { to: number }).to === square) && !splitTargets.includes(square);
+      if (!piece) {
+        // Check for superposed pieces
+        const pieces = getPiecesAtSquare(board, splitSource);
+        const relevantPieces = sandboxMode
+          ? pieces
+          : pieces.filter(p => p.color === board.activeColor);
+        
+        if (relevantPieces.length === 0) return false;
       }
       
-      // Check if this square is a valid split target
-      return splitMoves.some(m => {
-        const split = m as { to1: number; to2: number };
-        return split.to1 === square || split.to2 === square;
-      }) && !splitTargets.includes(square);
+      // Show legal normal move targets as potential split destinations
+      const normalMoves = legalMoves.filter(m => 
+        (m.type === 'normal' || m.type === 'capture') && (m as { from: number }).from === splitSource
+      );
+      return normalMoves.some(m => (m as { to: number }).to === square) && !splitTargets.includes(square);
     }
     
     // In merge mode, highlight valid merge targets

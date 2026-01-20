@@ -12,10 +12,10 @@ interface GameContainerProps {
 
 export function GameContainer({ children }: GameContainerProps) {
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-screen flex-col overflow-hidden">
       <Header />
       
-      <main className="container mx-auto flex-1 px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6">
+      <main className="container mx-auto flex-1 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6">
         <div className="grid gap-3 lg:grid-cols-[1fr_350px] lg:gap-6">
           {/* Main Game Area */}
           <div className="flex items-center justify-center">
