@@ -12,6 +12,8 @@ import type {
   SplitMove,
   MergeMove,
   Color,
+  PieceSymbol,
+  PromotionMove,
 } from '@/lib/types';
 import {
   getPieceAt,
@@ -90,8 +92,8 @@ function generateNormalMoves(
   board: BoardState,
   piece: QuantumPiece,
   fromSquare: SquareIndex
-): NormalMove[] {
-  const moves: NormalMove[] = [];
+): Move[] {
+  const moves: Move[] = [];
   
   // Get all geometrically possible target squares
   const targets = getPieceTargetSquares(piece.type, fromSquare, piece.color);
@@ -127,7 +129,7 @@ function generateNormalMoves(
               from: fromSquare,
               to: target,
               promoteTo,
-            });
+            } as Move);
           }
         } else {
           moves.push({
@@ -158,7 +160,7 @@ function generateNormalMoves(
               to: target,
               promoteTo,
               capturedPieceId: targetPiece.id,
-            });
+            } as Move);
           }
         } else {
           moves.push({
@@ -186,7 +188,7 @@ function generateNormalMoves(
                 to: target,
                 promoteTo,
                 capturedPieceId: enemyPieces[0].id,
-              });
+              } as Move);
             }
           } else {
             // Can capture superposed piece (will trigger measurement)

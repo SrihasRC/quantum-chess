@@ -720,18 +720,21 @@ export function collapseEntanglements(
     // Update or remove the entanglement
     if (Object.keys(consistentStates).length === 1) {
       // Fully collapsed - all pieces are certain, remove entanglement
-      newBoard.entanglements = newBoard.entanglements.filter(e => 
+      newBoard.entanglements = (newBoard.entanglements || []).filter(e => 
         !(e.pieceIds.every(id => ent.pieceIds.includes(id)) && 
           ent.pieceIds.every(id => e.pieceIds.includes(id)))
       );
     } else {
       // Partially collapsed - update with consistent states
-      const entIndex = newBoard.entanglements.findIndex(e =>
+      const entIndex = (newBoard.entanglements || []).findIndex(e =>
         e.pieceIds.every(id => ent.pieceIds.includes(id)) && 
         ent.pieceIds.every(id => e.pieceIds.includes(id))
       );
       
       if (entIndex !== -1) {
+        if (!newBoard.entanglements) {
+          newBoard.entanglements = [];
+        }
         newBoard.entanglements[entIndex] = {
           ...ent,
           jointStates: consistentStates,
