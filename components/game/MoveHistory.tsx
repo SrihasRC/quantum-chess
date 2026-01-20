@@ -48,14 +48,14 @@ export function MoveHistory() {
   const isViewingHistory = !isAtEnd && moveHistory.length > 0;
 
   return (
-    <Card className="p-3">
+    <Card className="p-2 sm:p-3">
       <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-sm">Move History</h3>
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <h3 className="font-semibold text-xs sm:text-sm">Move History</h3>
           {isViewingHistory && (
-            <Badge variant="secondary" className="text-xs flex items-center gap-1">
-              <Eye className="h-3 w-3" />
-              Viewing
+            <Badge variant="secondary" className="text-[10px] sm:text-xs flex items-center gap-0.5 sm:gap-1 px-1 sm:px-2">
+              <Eye className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+              <span className="hidden sm:inline">Viewing</span>
             </Badge>
           )}
         </div>
@@ -64,69 +64,69 @@ export function MoveHistory() {
           size="sm"
           onClick={undoMove}
           disabled={!canUndo}
-          className="h-7 px-2 hover:cursor-pointer hover:text-accent"
+          className="h-6 px-1.5 hover:cursor-pointer hover:text-accent sm:h-7 sm:px-2"
           title="Undo last move"
         >
-          <Undo2 className="h-3.5 w-3.5" />
+          <Undo2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
         </Button>
       </div>
       
       {/* Navigation Controls */}
-      <div className="flex gap-1 mb-1">
+      <div className="flex gap-0.5 mb-1 sm:gap-1">
         <Button
           variant="outline"
           size="sm"
           onClick={goToFirst}
           disabled={isAtStart}
-          className="h-7 px-2 flex-1 hover:cursor-pointer hover:text-accent"
+          className="h-6 px-1 flex-1 hover:cursor-pointer hover:text-accent sm:h-7 sm:px-2"
           title="Go to start"
         >
-          <ChevronsLeft className="h-3.5 w-3.5" />
+          <ChevronsLeft className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
         </Button>
         <Button
           variant="outline"
           size="sm"
           onClick={goToPrevious}
           disabled={isAtStart}
-          className="h-7 px-2 flex-1 hover:cursor-pointer hover:text-accent"
+          className="h-6 px-1 flex-1 hover:cursor-pointer hover:text-accent sm:h-7 sm:px-2"
           title="Previous move"
         >
-          <ChevronLeft className="h-3.5 w-3.5" />
+          <ChevronLeft className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
         </Button>
         <Button
           variant="outline"
           size="sm"
           onClick={goToNext}
           disabled={isAtEnd}
-          className="h-7 px-2 flex-1 hover:cursor-pointer hover:text-accent"
+          className="h-6 px-1 flex-1 hover:cursor-pointer hover:text-accent sm:h-7 sm:px-2"
           title="Next move"
         >
-          <ChevronRight className="h-3.5 w-3.5" />
+          <ChevronRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
         </Button>
         <Button
           variant="outline"
           size="sm"
           onClick={goToLast}
           disabled={isAtEnd}
-          className="h-7 px-2 flex-1 hover:cursor-pointer hover:text-accent"
+          className="h-6 px-1 flex-1 hover:cursor-pointer hover:text-accent sm:h-7 sm:px-2"
           title="Go to latest"
         >
-          <ChevronsRight className="h-3.5 w-3.5" />
+          <ChevronsRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
         </Button>
       </div>
       
-      <div className="h-36 overflow-y-auto space-y-0.5 flex flex-col-reverse">
+      <div className="h-24 overflow-y-auto space-y-0.5 flex flex-col-reverse sm:h-36">
         {moveHistory.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No moves yet</p>
+          <p className="text-[10px] text-muted-foreground sm:text-xs">No moves yet</p>
         ) : (
           moveHistory.map((entry, idx) => (
             <div
               key={idx}
-              className={`flex items-center gap-2 text-xs p-1 rounded ${
+              className={`flex items-center gap-1.5 text-[10px] p-0.5 rounded sm:gap-2 sm:text-xs sm:p-1 ${
                 idx === currentMoveIndex ? 'bg-accent font-semibold' : 'hover:bg-accent/50'
               }`}
             >
-              <span className="font-mono text-muted-foreground min-w-5">
+              <span className="font-mono text-muted-foreground min-w-4 sm:min-w-5">
                 {idx + 1}.
               </span>
               <span className="font-mono">{formatMove(entry.move)}</span>

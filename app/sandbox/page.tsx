@@ -189,7 +189,7 @@ export default function SandboxPage() {
           e.dataTransfer.effectAllowed = "copy";
         }}
         onClick={() => handlePieceClick(piece)}
-        className={`cursor-pointer w-14 h-14 flex items-center justify-center border-2 rounded transition-all
+        className={`cursor-pointer w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center border-2 rounded transition-all
           ${selectedPieceForPlacement === piece 
             ? 'border-primary bg-primary/20 scale-110' 
             : 'border-border bg-card hover:bg-accent hover:scale-105'
@@ -199,9 +199,9 @@ export default function SandboxPage() {
         <Image 
           src={pieceImages[piece]} 
           alt={piece}
-          width={48}
-          height={48}
-          className="select-none pointer-events-none"
+          width={32}
+          height={32}
+          className="select-none pointer-events-none w-8 h-8 sm:w-12 sm:h-12"
           draggable={false}
         />
       </div>
@@ -213,15 +213,15 @@ export default function SandboxPage() {
       <Header />
       
       {/* Main content */}
-      <div className="flex-1 flex gap-4 p-4 justify-center items-center overflow-hidden">
+      <div className="flex-1 flex flex-col gap-3 p-2 overflow-auto sm:p-4 lg:flex-row lg:gap-4 lg:justify-center lg:items-center lg:overflow-hidden">
         {/* Board with move mode selector */}
-        <div className="flex flex-col items-center justify-center">
-          <div className="flex items-center gap-6">
-            <div className="shrink-0">
+        <div className="flex flex-col items-center justify-center order-2 lg:order-1">
+          <div className="flex flex-col items-center gap-3 w-full sm:gap-4 md:flex-row md:gap-6">
+            <div className="w-full shrink-0 md:w-auto">
               <MoveModSelector mode={moveMode} onModeChange={setMoveMode} />
             </div>
             <div
-              className="w-[min(90vh,90vw)]"
+              className="w-full max-w-xl md:w-[min(90vh,90vw)]"
               onDrop={(e) => {
                 e.preventDefault();
                 const piece = e.dataTransfer.getData("piece") as PieceSymbol;
@@ -256,14 +256,68 @@ export default function SandboxPage() {
           </div>
         </div>
 
-        {/* Left sidebar - Pieces palette and controls */}
-        <div className="flex gap-4 w-64">
-          {/* Pieces palette */}
-          <div className="flex gap-4">
+        {/* Controls and pieces palette - horizontal on mobile, vertical on desktop */}
+        <div className="flex flex-col gap-3 order-1 sm:gap-4 lg:order-2 lg:w-64">
+          {/* Controls */}
+          <div className="flex flex-col gap-1.5 sm:gap-2">
+            <div className="text-xs font-medium sm:text-sm">Board Controls</div>
+            <div className="grid grid-cols-2 gap-1.5 sm:gap-2 lg:grid-cols-1">
+              <Button 
+                onClick={() => {
+                  setDeleteMode(!deleteMode);
+                  setSelectedPieceForPlacement(null);
+                  toast.info(deleteMode ? "Delete mode disabled" : "Delete mode enabled - click pieces to remove");
+                }} 
+                variant={deleteMode ? "destructive" : "outline"}
+                size="sm" 
+                className="w-full hover:cursor-pointer hover:text-accent text-xs"
+              >
+                <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                <span className="hidden sm:inline">{deleteMode ? "Delete Mode: ON" : "Delete Mode"}</span>
+              </Button>
+              <Button 
+                onClick={() => setFlipped(!flipped)} 
+                variant="outline" 
+                size="sm" 
+                className="w-full hover:cursor-pointer hover:text-accent text-xs"
+              >
+                <FlipVertical className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Flip Board</span>
+              </Button>
+              <Button 
+                onClick={undoMove} 
+                variant="outline" 
+                size="sm" 
+                className="w-full hover:cursor-pointer hover:text-accent text-xs"
+              >
+                Undo
+              </Button>
+              <Button onClick={handleClearBoard} variant="destructive" size="sm" className="w-full hover:cursor-pointer hover:text-accent text-xs">
+                Clear
+              </Button>
+              <Button
+                onClick={() => useGameStore.getState().newGame()}
+                variant="outline"
+                size="sm"
+                className="w-full hover:cursor-pointer hover:text-accent text-xs"
+              >
+                Reset
+              </Button>
+              <Button onClick={handleExportBoard} variant="outline" size="sm" className="w-full hover:cursor-pointer hover:text-accent text-xs">
+                Export
+              </Button>
+              <Button onClick={() => setImportDialogOpen(true)} variant="outline" size="sm" className="w-full hover:cursor-pointer hover:text-accent text-xs">
+                Import
+              </Button>
+            </div>
+          </div>
+
+          {/* Pieces palette - horizontal scroll on mobile, vertical on desktop */}
+          <div className="flex gap-3 overflow-x-auto pb-2 sm:gap-4 lg:overflow-visible lg:pb-0">
             {/* White pieces */}
-            <div className="flex flex-col gap-2">
-              <div className="text-xs font-medium text-center">White</div>
-              <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5 shrink-0 sm:gap-2">
+              <div className="text-[10px] font-medium text-center sm:text-xs">White</div>
+              <div className="flex flex-row gap-1 lg:flex-col">
                 {whitePieces.map((piece) => (
                   <PieceBox key={piece} piece={piece} />
                 ))}
@@ -271,73 +325,22 @@ export default function SandboxPage() {
             </div>
 
             {/* Black pieces */}
-            <div className="flex flex-col gap-2">
-              <div className="text-xs font-medium text-center">Black</div>
-              <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5 shrink-0 sm:gap-2">
+              <div className="text-[10px] font-medium text-center sm:text-xs">Black</div>
+              <div className="flex flex-row gap-1 lg:flex-col">
                 {blackPieces.map((piece) => (
                   <PieceBox key={piece} piece={piece as PieceSymbol} />
                 ))}
               </div>
             </div>
           </div>
-
-          {/* Controls */}
-          <div className="flex flex-col gap-2">
-            <div className="text-xs font-medium">Board Controls</div>
-            <Button 
-              onClick={() => {
-                setDeleteMode(!deleteMode);
-                setSelectedPieceForPlacement(null);
-                toast.info(deleteMode ? "Delete mode disabled" : "Delete mode enabled - click pieces to remove");
-              }} 
-              variant={deleteMode ? "destructive" : "outline"}
-              size="sm" 
-              className="w-full hover:cursor-pointer hover:text-accent"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              {deleteMode ? "Delete Mode: ON" : "Delete Mode"}
-            </Button>
-            <Button 
-              onClick={() => setFlipped(!flipped)} 
-              variant="outline" 
-              size="sm" 
-              className="w-full hover:cursor-pointer hover:text-accent"
-            >
-              <FlipVertical className="h-4 w-4 mr-2" />
-              Flip Board
-            </Button>
-            <Button 
-              onClick={undoMove} 
-              variant="outline" 
-              size="sm" 
-              className="w-full hover:cursor-pointer hover:text-accent"
-            >
-              Undo Move
-            </Button>
-            <Button onClick={handleClearBoard} variant="destructive" size="sm" className="w-full hover:cursor-pointer hover:text-accent">
-              Clear Board
-            </Button>
-            <Button
-              onClick={() => useGameStore.getState().newGame()}
-              variant="outline"
-              size="sm"
-              className="w-full hover:cursor-pointer hover:text-accent"
-            >
-              Reset to Initial
-            </Button>
-            <Button onClick={handleExportBoard} variant="outline" size="sm" className="w-full hover:cursor-pointer hover:text-accent">
-              Export JSON
-            </Button>
-            <Button onClick={() => setImportDialogOpen(true)} variant="outline" size="sm" className="w-full hover:cursor-pointer hover:text-accent">
-              Import JSON
-            </Button>
-            <div className="text-xs text-muted-foreground mt-2 p-2 bg-muted rounded">
-              <p><strong>Placement:</strong></p>
-              <p>• Click piece then click square</p>
-              <p>• Or drag piece to square</p>
-              <p><strong>Removal:</strong></p>
-              <p>• Enable Delete Mode, then click piece</p>
-            </div>
+          
+          <div className="text-[10px] text-muted-foreground p-2 bg-muted rounded sm:text-xs lg:mt-2">
+            <p><strong>Placement:</strong></p>
+            <p>• Click piece then click square</p>
+            <p>• Or drag piece to square</p>
+            <p><strong>Removal:</strong></p>
+            <p>• Enable Delete Mode, then click piece</p>
           </div>
         </div>
       </div>

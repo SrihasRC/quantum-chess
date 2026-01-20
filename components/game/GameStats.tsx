@@ -28,13 +28,13 @@ export function GameStats() {
   ).length;
 
   return (
-    <Card className="p-3">
-      <h3 className="font-semibold text-sm mb-2">Game Stats</h3>
+    <Card className="p-2 sm:p-3">
+      <h3 className="font-semibold text-xs mb-1.5 sm:text-sm sm:mb-2">Game Stats</h3>
       
-      <div className="space-y-2">
+      <div className="space-y-1.5 sm:space-y-2">
         <div className="flex justify-between items-center">
-          <span className="text-xs text-muted-foreground">Turn:</span>
-          <Badge variant="secondary" className="text-xs">
+          <span className="text-[10px] text-muted-foreground sm:text-xs">Turn:</span>
+          <Badge variant="secondary" className="text-[10px] sm:text-xs">
             {Math.floor(board.fullmoveNumber)}
           </Badge>
         </div>
@@ -42,27 +42,27 @@ export function GameStats() {
         <Separator />
 
         <div className="flex justify-between items-center">
-          <span className="text-xs text-muted-foreground">White pieces:</span>
-          <span className="font-medium text-sm">{whitePieces}</span>
+          <span className="text-[10px] text-muted-foreground sm:text-xs">White pieces:</span>
+          <span className="font-medium text-xs sm:text-sm">{whitePieces}</span>
         </div>
 
         <div className="flex justify-between items-center">
-          <span className="text-xs text-muted-foreground">Black pieces:</span>
-          <span className="font-medium text-sm">{blackPieces}</span>
+          <span className="text-[10px] text-muted-foreground sm:text-xs">Black pieces:</span>
+          <span className="font-medium text-xs sm:text-sm">{blackPieces}</span>
         </div>
 
         <Separator />
 
         <div className="flex justify-between items-center">
-          <span className="text-xs text-muted-foreground">Quantum pieces:</span>
-          <Badge variant="outline" className="text-xs">{quantumPieces}</Badge>
+          <span className="text-[10px] text-muted-foreground sm:text-xs">Quantum pieces:</span>
+          <Badge variant="outline" className="text-[10px] sm:text-xs">{quantumPieces}</Badge>
         </div>
 
         <div className="flex justify-between items-center">
-          <span className="text-xs text-muted-foreground">Status:</span>
+          <span className="text-[10px] text-muted-foreground sm:text-xs">Status:</span>
           <Badge
             variant={status === 'active' ? 'default' : 'destructive'}
-            className="text-xs"
+            className="text-[10px] sm:text-xs"
           >
             {status}
           </Badge>

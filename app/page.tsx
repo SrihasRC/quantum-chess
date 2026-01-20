@@ -19,11 +19,11 @@ export default function Home() {
   return (
     <>
       <GameContainer>
-        <div className="flex w-2xl items-center gap-6">
-          <div className="shrink-0">
+        <div className="flex w-full flex-col items-center gap-3 sm:gap-4 md:w-2xl md:flex-row md:gap-6 lg:gap-8">
+          <div className="w-full shrink-0 md:w-auto">
             <MoveModSelector mode={moveMode} onModeChange={setMoveMode} />
           </div>
-          <div className="flex-1">
+          <div className="w-full flex-1">
             <Chessboard mode={moveMode} />
           </div>
         </div>
