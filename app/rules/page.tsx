@@ -17,8 +17,8 @@ export default function RulesPage() {
       <div className="sticky top-0 z-50 border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <Crown className="h-5 w-5 text-primary-foreground" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg">
+              <Crown className="h-5 w-5 text-primary" />
             </div>
             <Link href="/" className="text-xl font-bold">
               Quantum Chess
