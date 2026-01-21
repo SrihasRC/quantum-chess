@@ -4,7 +4,10 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { Header } from "@/components/layout/Header";
 import { Chessboard } from "@/components/board/Chessboard";
-import { MoveModSelector, type MoveMode } from "@/components/game/MoveModSelector";
+import {
+  MoveModSelector,
+  type MoveMode,
+} from "@/components/game/MoveModSelector";
 import ImportBoardDialog from "@/components/sandbox/ImportBoardDialog";
 import { Button } from "@/components/ui/button";
 import { useGameStore } from "@/lib/store/gameStore";
@@ -18,8 +21,9 @@ const whitePieces: PieceSymbol[] = ["K", "Q", "R", "B", "N", "P"];
 const blackPieces: (PieceSymbol | string)[] = ["k", "q", "r", "b", "n", "p"];
 
 export default function SandboxPage() {
-  const [selectedPieceForPlacement, setSelectedPieceForPlacement] = useState<PieceSymbol | null>(null);
-  const [moveMode, setMoveMode] = useState<MoveMode>('classic');
+  const [selectedPieceForPlacement, setSelectedPieceForPlacement] =
+    useState<PieceSymbol | null>(null);
+  const [moveMode, setMoveMode] = useState<MoveMode>("classic");
   const [flipped, setFlipped] = useState(false);
   const [deleteMode, setDeleteMode] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -45,7 +49,6 @@ export default function SandboxPage() {
     toast.success("Board cleared");
   };
 
-
   const handlePieceClick = (piece: PieceSymbol) => {
     setDeleteMode(false);
     setSelectedPieceForPlacement(piece);
@@ -63,7 +66,10 @@ export default function SandboxPage() {
         return;
       }
 
-      const color = selectedPieceForPlacement === selectedPieceForPlacement.toUpperCase() ? "white" : "black";
+      const color =
+        selectedPieceForPlacement === selectedPieceForPlacement.toUpperCase()
+          ? "white"
+          : "black";
       const pieceType = selectedPieceForPlacement.toUpperCase() as PieceSymbol;
       const newPieceId = `${color[0]}${pieceType}-sandbox-${Date.now()}`;
 
@@ -83,7 +89,9 @@ export default function SandboxPage() {
         },
       });
 
-      toast.success(`Placed ${selectedPieceForPlacement} at ${indexToAlgebraic(square)}`);
+      toast.success(
+        `Placed ${selectedPieceForPlacement} at ${indexToAlgebraic(square)}`,
+      );
       setSelectedPieceForPlacement(null);
       return;
     }
@@ -94,9 +102,7 @@ export default function SandboxPage() {
       useGameStore.setState({
         board: {
           ...currentBoard,
-          pieces: currentBoard.pieces.filter(
-            (p) => p.id !== pieceToRemove.id
-          ),
+          pieces: currentBoard.pieces.filter((p) => p.id !== pieceToRemove.id),
         },
       });
       toast.success(`Removed ${pieceToRemove.type}`);
@@ -153,7 +159,7 @@ export default function SandboxPage() {
     try {
       const boardState = JSON.parse(json);
       // Reset history when importing to prevent undo issues
-      useGameStore.setState({ 
+      useGameStore.setState({
         board: boardState,
         boardStateHistory: [boardState],
         moveHistory: [],
@@ -190,14 +196,15 @@ export default function SandboxPage() {
         }}
         onClick={() => handlePieceClick(piece)}
         className={`cursor-pointer w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center border-2 rounded transition-all
-          ${selectedPieceForPlacement === piece 
-            ? 'border-primary bg-primary/20 scale-110' 
-            : 'border-border bg-card hover:bg-accent hover:scale-105'
+          ${
+            selectedPieceForPlacement === piece
+              ? "border-primary bg-primary/20 scale-110"
+              : "border-border bg-card hover:bg-accent hover:scale-105"
           }`}
         title={`Click to select or drag to place ${piece}`}
       >
-        <Image 
-          src={pieceImages[piece]} 
+        <Image
+          src={pieceImages[piece]}
           alt={piece}
           width={32}
           height={32}
@@ -211,11 +218,11 @@ export default function SandboxPage() {
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <Header />
-      
+
       {/* Main content */}
       <div className="flex-1 flex flex-col gap-3 p-2 overflow-auto sm:p-4 lg:flex-row lg:gap-4 lg:justify-center lg:items-center lg:overflow-hidden">
         {/* Board with move mode selector */}
-        <div className="flex flex-col items-center justify-center order-2 lg:order-1">
+        <div className="flex flex-col items-center justify-center order-1 lg:order-1">
           <div className="flex flex-col items-center gap-3 w-full sm:gap-4 md:flex-row md:gap-6">
             <div className="w-full shrink-0 md:w-auto">
               <MoveModSelector mode={moveMode} onModeChange={setMoveMode} />
@@ -231,7 +238,7 @@ export default function SandboxPage() {
                 const squareEl = target.closest("[data-square]");
                 if (squareEl) {
                   const square = parseInt(
-                    squareEl.getAttribute("data-square") || "0"
+                    squareEl.getAttribute("data-square") || "0",
                   );
                   handleSquareDrop(square, piece);
                 }
@@ -245,7 +252,7 @@ export default function SandboxPage() {
                 const squareEl = target.closest("[data-square]");
                 if (squareEl) {
                   const square = parseInt(
-                    squareEl.getAttribute("data-square") || "0"
+                    squareEl.getAttribute("data-square") || "0",
                   );
                   handleSquareClick(square);
                 }
@@ -256,43 +263,81 @@ export default function SandboxPage() {
           </div>
         </div>
 
-        {/* Controls and pieces palette - horizontal on mobile, vertical on desktop */}
-        <div className="flex flex-col gap-3 order-1 sm:gap-4 lg:order-2 lg:w-64">
+        {/* Controls and pieces palette - stacked on mobile, side layout on desktop */}
+        <div className="flex flex-col gap-3 order-2 sm:gap-4 lg:flex-row lg:order-2 lg:ml-8">
+          {/* Pieces palette - horizontal scroll on mobile, columns on desktop */}
+          <div className="flex flex-col m-auto gap-3 overflow-x-auto pb-2 sm:gap-4 lg:overflow-visible lg:pb-0 lg:flex-row">
+            {/* White pieces */}
+            <div className="flex flex-col gap-1.5 shrink-0 sm:gap-2">
+              <div className="text-[10px] font-medium text-center sm:text-xs">
+                White
+              </div>
+              <div className="flex flex-row gap-1 lg:flex-col">
+                {whitePieces.map((piece) => (
+                  <PieceBox key={piece} piece={piece} />
+                ))}
+              </div>
+            </div>
+
+            {/* Black pieces */}
+            <div className="flex flex-col gap-1.5 shrink-0 sm:gap-2">
+              <div className="text-[10px] font-medium text-center sm:text-xs">
+                Black
+              </div>
+              <div className="flex flex-row gap-1 lg:flex-col">
+                {blackPieces.map((piece) => (
+                  <PieceBox key={piece} piece={piece as PieceSymbol} />
+                ))}
+              </div>
+            </div>
+          </div>
+
           {/* Controls */}
-          <div className="flex flex-col gap-1.5 sm:gap-2">
+          <div className="flex flex-col gap-1.5 sm:gap-2 lg:w-64">
             <div className="text-xs font-medium sm:text-sm">Board Controls</div>
             <div className="grid grid-cols-2 gap-1.5 sm:gap-2 lg:grid-cols-1">
-              <Button 
+              <Button
                 onClick={() => {
                   setDeleteMode(!deleteMode);
                   setSelectedPieceForPlacement(null);
-                  toast.info(deleteMode ? "Delete mode disabled" : "Delete mode enabled - click pieces to remove");
-                }} 
+                  toast.info(
+                    deleteMode
+                      ? "Delete mode disabled"
+                      : "Delete mode enabled - click pieces to remove",
+                  );
+                }}
                 variant={deleteMode ? "destructive" : "outline"}
-                size="sm" 
+                size="sm"
                 className="w-full hover:cursor-pointer hover:text-accent text-xs"
               >
                 <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
-                <span className="hidden sm:inline">{deleteMode ? "Delete Mode: ON" : "Delete Mode"}</span>
+                <span className="hidden sm:inline">
+                  {deleteMode ? "Delete Mode: ON" : "Delete Mode"}
+                </span>
               </Button>
-              <Button 
-                onClick={() => setFlipped(!flipped)} 
-                variant="outline" 
-                size="sm" 
+              <Button
+                onClick={() => setFlipped(!flipped)}
+                variant="outline"
+                size="sm"
                 className="w-full hover:cursor-pointer hover:text-accent text-xs"
               >
                 <FlipVertical className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Flip Board</span>
               </Button>
-              <Button 
-                onClick={undoMove} 
-                variant="outline" 
-                size="sm" 
+              <Button
+                onClick={undoMove}
+                variant="outline"
+                size="sm"
                 className="w-full hover:cursor-pointer hover:text-accent text-xs"
               >
                 Undo
               </Button>
-              <Button onClick={handleClearBoard} variant="destructive" size="sm" className="w-full hover:cursor-pointer hover:text-accent text-xs">
+              <Button
+                onClick={handleClearBoard}
+                variant="destructive"
+                size="sm"
+                className="w-full hover:cursor-pointer hover:text-accent text-xs"
+              >
                 Clear
               </Button>
               <Button
@@ -303,48 +348,39 @@ export default function SandboxPage() {
               >
                 Reset
               </Button>
-              <Button onClick={handleExportBoard} variant="outline" size="sm" className="w-full hover:cursor-pointer hover:text-accent text-xs">
+              <Button
+                onClick={handleExportBoard}
+                variant="outline"
+                size="sm"
+                className="w-full hover:cursor-pointer hover:text-accent text-xs"
+              >
                 Export
               </Button>
-              <Button onClick={() => setImportDialogOpen(true)} variant="outline" size="sm" className="w-full hover:cursor-pointer hover:text-accent text-xs">
+              <Button
+                onClick={() => setImportDialogOpen(true)}
+                variant="outline"
+                size="sm"
+                className="w-full hover:cursor-pointer hover:text-accent text-xs"
+              >
                 Import
               </Button>
             </div>
-          </div>
 
-          {/* Pieces palette - horizontal scroll on mobile, vertical on desktop */}
-          <div className="flex gap-3 overflow-x-auto pb-2 sm:gap-4 lg:overflow-visible lg:pb-0">
-            {/* White pieces */}
-            <div className="flex flex-col gap-1.5 shrink-0 sm:gap-2">
-              <div className="text-[10px] font-medium text-center sm:text-xs">White</div>
-              <div className="flex flex-row gap-1 lg:flex-col">
-                {whitePieces.map((piece) => (
-                  <PieceBox key={piece} piece={piece} />
-                ))}
-              </div>
+            <div className="text-[10px] text-muted-foreground p-2 bg-muted rounded sm:text-xs lg:mt-2 lg:w-64">
+              <p>
+                <strong>Placement:</strong>
+              </p>
+              <p>• Click piece then click square</p>
+              <p>• Or drag piece to square</p>
+              <p>
+                <strong>Removal:</strong>
+              </p>
+              <p>• Enable Delete Mode, then click piece</p>
             </div>
-
-            {/* Black pieces */}
-            <div className="flex flex-col gap-1.5 shrink-0 sm:gap-2">
-              <div className="text-[10px] font-medium text-center sm:text-xs">Black</div>
-              <div className="flex flex-row gap-1 lg:flex-col">
-                {blackPieces.map((piece) => (
-                  <PieceBox key={piece} piece={piece as PieceSymbol} />
-                ))}
-              </div>
-            </div>
-          </div>
-          
-          <div className="text-[10px] text-muted-foreground p-2 bg-muted rounded sm:text-xs lg:mt-2">
-            <p><strong>Placement:</strong></p>
-            <p>• Click piece then click square</p>
-            <p>• Or drag piece to square</p>
-            <p><strong>Removal:</strong></p>
-            <p>• Enable Delete Mode, then click piece</p>
           </div>
         </div>
       </div>
-      
+
       <ImportBoardDialog
         open={importDialogOpen}
         onOpenChange={setImportDialogOpen}
