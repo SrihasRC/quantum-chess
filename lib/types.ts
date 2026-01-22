@@ -272,6 +272,8 @@ export interface GameState {
   boardStateHistory: BoardState[]; // history of board states for navigation
   currentMoveIndex: number; // -1 = before any moves, 0 = after first move, etc.
   sandboxMode?: boolean; // if true, allow moving any piece regardless of turn
+  lastMove?: { from: SquareIndex; to: SquareIndex } | null; // last move for highlighting
+  failedCaptureAnimation?: { from: SquareIndex; to: SquareIndex } | null; // failed capture animation
 }
 
 // UI State

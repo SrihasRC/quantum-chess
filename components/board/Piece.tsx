@@ -48,7 +48,7 @@ export function Piece({
       />
       
       {isSuperposed && (
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full bg-violet-600/90 px-2 py-0.5 text-xs font-bold text-white shadow-md">
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full bg-black/40 backdrop-blur-sm px-2 py-0.5 text-xs font-bold text-white shadow-lg">
           {Math.round(probability * 100)}%
         </div>
       )}

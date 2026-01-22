@@ -9,6 +9,10 @@ interface SquareProps {
   isLight: boolean;
   isSelected: boolean;
   isLegalMove: boolean;
+  isLastMoveFrom?: boolean;
+  isLastMoveTo?: boolean;
+  isFailedCaptureFrom?: boolean;
+  isFailedCaptureTo?: boolean;
   onClick: () => void;
   children?: React.ReactNode;
 }
@@ -18,6 +22,10 @@ export function Square({
   isLight,
   isSelected,
   isLegalMove,
+  isLastMoveFrom = false,
+  isLastMoveTo = false,
+  isFailedCaptureFrom = false,
+  isFailedCaptureTo = false,
   onClick,
   children,
 }: SquareProps) {
@@ -38,12 +46,37 @@ export function Square({
         isLight ? 'bg-secondary' : 'bg-secondary/60',
         // Hover effect
         'hover:brightness-95',
-        // Selected state
+        // Selected state (highest priority)
         isSelected && 'ring-4 ring-primary ring-inset',
+        // Last move highlighting (darker shade of square color)
+        !isSelected && (isLastMoveFrom || isLastMoveTo) && 'brightness-75 opacity-90',
         // Legal move indicator
-        isLegalMove && 'ring-2 ring-primary/50 ring-inset'
+        isLegalMove && 'ring-2 ring-primary/60 ring-inset shadow-inner shadow-primary/30'
       )}
     >
+      {/* Failed Capture Animation Line */}
+      {isFailedCaptureFrom && isFailedCaptureTo && (
+        <svg
+          className="absolute inset-0 pointer-events-none"
+          style={{ zIndex: 50 }}
+        >
+          <line
+            x1="50%"
+            y1="50%"
+            x2="50%"
+            y2="50%"
+            stroke="black"
+            strokeWidth="2"
+            className="animate-pulse"
+          />
+        </svg>
+      )}
+      
+      {/* Animated line from failed capture source to fallback */}
+      {(isFailedCaptureFrom || isFailedCaptureTo) && (
+        <div className="absolute inset-0 bg-red-500/10 animate-pulse" />
+      )}
+
       {/* Square Content */}
       <div className="absolute inset-0 flex items-center justify-center">
         {children}
@@ -52,8 +85,13 @@ export function Square({
       {/* Legal Move Dot */}
       {isLegalMove && !children && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="h-3 w-3 rounded-full bg-primary/40" />
+          <div className="h-4 w-4 sm:h-5 sm:w-5 rounded-full bg-primary/50 shadow-lg" />
         </div>
+      )}
+      
+      {/* Legal Move Ring for capture */}
+      {isLegalMove && children && (
+        <div className="absolute inset-2 rounded-full ring-2 ring-primary/60" />
       )}
 
       {/* Coordinate Labels */}

@@ -62,6 +62,7 @@ import {
 import {
   isSlidingMove,
 } from '@/lib/engine/rules';
+import { playMoveSound, playCaptureSound } from '@/lib/utils/sounds';
 
 // Game Store Interface
 
@@ -110,6 +111,8 @@ function createInitialGameState(): GameState {
     boardStateHistory: [cloneBoardState(initialBoard)], // Store initial board state
     currentMoveIndex: -1, // -1 means at initial position, before any moves
     sandboxMode: false,
+    lastMove: null,
+    failedCaptureAnimation: null,
   };
 }
 
@@ -521,9 +524,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
           if (roll > probAtTarget) {
             // Measurement failed - target not at capture square
             console.log('Pawn capture measurement failed - target not at capture square');
-            toast.info('Capture Failed', {
-              description: `Target piece was not found at ${indexToAlgebraic(move.to)} (${Math.round(probAtTarget * 100)}% chance). Pawn remains in place.`,
+            
+            // Show animation instead of toast
+            set({ 
+              failedCaptureAnimation: { from: move.from, to: move.to },
+              selectedSquare: null,
+              legalMoves: [],
             });
+            
+            // Clear animation after a short delay
+            setTimeout(() => {
+              set({ failedCaptureAnimation: null });
+            }, 800);
             
             // Partial measurement: Remove probability from target square and renormalize
             const newSuperposition: Record<number, number> = {};
@@ -688,6 +700,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const newHistory = [...currentState.moveHistory, historyEntry];
     const newBoardHistory = [...currentState.boardStateHistory, cloneBoardState(newBoard)];
     
+    // Play sound effect
+    if (move.type === 'capture' || (move.type === 'promotion' && 'capturedPieceId' in move) || move.type === 'en-passant') {
+      playCaptureSound();
+    } else {
+      playMoveSound();
+    }
+    
+    // Track last move for highlighting
+    let lastMoveHighlight: { from: SquareIndex; to: SquareIndex } | null = null;
+    if ('from' in move && 'to' in move) {
+      lastMoveHighlight = { from: move.from, to: move.to };
+    } else if (move.type === 'split') {
+      lastMoveHighlight = { from: move.from, to: move.to1 };
+    } else if (move.type === 'merge') {
+      lastMoveHighlight = { from: move.from1, to: move.to };
+    }
+    
     set({
       board: newBoard,
       status: newStatus,
@@ -696,6 +725,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       currentMoveIndex: newHistory.length - 1, // Set to latest move
       selectedSquare: null,
       legalMoves: [],
+      lastMove: lastMoveHighlight,
+      failedCaptureAnimation: null,
     });
   },
   
@@ -728,9 +759,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       currentMoveIndex: targetIndex,
       selectedSquare: null,
       legalMoves: [],
+      lastMove: null,
     });
-    
-    toast.info('Move undone');
   },
   
   // Navigation Actions (Read-only time-travel)

@@ -9,6 +9,7 @@ import { useGameStore } from '@/lib/store/gameStore';
 import { getPieceAt, getPiecesAtSquare } from '@/lib/engine/state';
 import { validateMove } from '@/lib/engine/moves';
 import { indexToAlgebraic } from '@/lib/engine/utils';
+import { initSounds } from '@/lib/utils/sounds';
 import type { SquareIndex } from '@/lib/types';
 import type { MoveMode } from '@/components/game/MoveModSelector';
 
@@ -25,10 +26,17 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
   const moveHistory = useGameStore((state) => state.moveHistory);
   const promotionPending = useGameStore((state) => state.promotionPending);
   const sandboxMode = useGameStore((state) => state.sandboxMode);
+  const lastMove = useGameStore((state) => state.lastMove);
+  const failedCaptureAnimation = useGameStore((state) => state.failedCaptureAnimation);
   const selectPiece = useGameStore((state) => state.selectPiece);
   const movePiece = useGameStore((state) => state.movePiece);
   const selectPromotionPiece = useGameStore((state) => state.selectPromotionPiece);
   const cancelPromotion = useGameStore((state) => state.cancelPromotion);
+  
+  // Initialize sounds once
+  useEffect(() => {
+    initSounds();
+  }, []);
   
   // Split move state
   const [splitSource, setSplitSource] = useState<SquareIndex | null>(null);
@@ -405,6 +413,10 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
         
         const isSelected = isSquareHighlighted(index);
         const isLegalMove = isLegalMoveSquare(index);
+        const isLastMoveFrom = lastMove?.from === index;
+        const isLastMoveTo = lastMove?.to === index;
+        const isFailedCaptureFrom = failedCaptureAnimation?.from === index;
+        const isFailedCaptureTo = failedCaptureAnimation?.to === index;
 
         squares.push(
           <Square
@@ -413,6 +425,10 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
             isLight={isLight}
             isSelected={isSelected}
             isLegalMove={isLegalMove}
+            isLastMoveFrom={isLastMoveFrom}
+            isLastMoveTo={isLastMoveTo}
+            isFailedCaptureFrom={isFailedCaptureFrom}
+            isFailedCaptureTo={isFailedCaptureTo}
             onClick={() => handleSquareClick(index)}
           >
             {piece && (

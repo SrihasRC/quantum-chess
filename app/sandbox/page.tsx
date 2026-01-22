@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { useGameStore } from "@/lib/store/gameStore";
 import { createInitialBoardState, getPiecesAtSquare } from "@/lib/engine/state";
 import type { PieceSymbol, SquareIndex } from "@/lib/types";
-import { indexToAlgebraic } from "@/lib/engine/utils";
+// import { indexToAlgebraic } from "@/lib/engine/utils";
 import { toast } from "sonner";
 import { FlipVertical, Trash2 } from "lucide-react";
 
@@ -52,7 +52,6 @@ export default function SandboxPage() {
   const handlePieceClick = (piece: PieceSymbol) => {
     setDeleteMode(false);
     setSelectedPieceForPlacement(piece);
-    toast.info(`Click on a square to place ${piece}`);
   };
 
   const handleSquareClick = (square: SquareIndex) => {
@@ -89,9 +88,6 @@ export default function SandboxPage() {
         },
       });
 
-      toast.success(
-        `Placed ${selectedPieceForPlacement} at ${indexToAlgebraic(square)}`,
-      );
       setSelectedPieceForPlacement(null);
       return;
     }
@@ -105,14 +101,12 @@ export default function SandboxPage() {
           pieces: currentBoard.pieces.filter((p) => p.id !== pieceToRemove.id),
         },
       });
-      toast.success(`Removed ${pieceToRemove.type}`);
       return;
     }
 
     // Disable delete mode if clicking on empty square
     if (deleteMode && piecesAtSquare.length === 0) {
       setDeleteMode(false);
-      toast.info("Delete mode disabled");
     }
   };
 
@@ -145,7 +139,6 @@ export default function SandboxPage() {
       },
     });
 
-    toast.success(`Placed ${piece} at ${indexToAlgebraic(square)}`);
   };
 
   const handleExportBoard = () => {
