@@ -151,16 +151,24 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
               toast.success('Split Move', {
                 description: `Piece split into superposition: ${indexToAlgebraic(newTargets[0])} and ${indexToAlgebraic(newTargets[1])}`,
               });
+              
+              // Reset split state after successful move
+              setSplitSource(null);
+              setSplitTargets([]);
             } else {
               // Show error toast
               toast.error('Invalid Split Move', {
                 description: validation.reason || 'Cannot split to those squares',
               });
+              
+              // Reset to allow reselection - clear targets but keep source
+              setSplitTargets([]);
             }
+          } else {
+            // No piece found - reset state
+            setSplitSource(null);
+            setSplitTargets([]);
           }
-          // Reset split state (mode persists unless user changes it)
-          setSplitSource(null);
-          setSplitTargets([]);
         }
       }
     }
@@ -283,7 +291,7 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
 
   /** Check if square is a legal move destination */
   const isLegalMoveSquare = (square: SquareIndex): boolean => {
-    // In split mode, show available split targets based on legal moves
+    // In split mode, show available split targets based on legal split moves
     if (splitMode && splitSource !== null) {
       const piece = getPieceAt(board, splitSource);
       if (!piece) {
@@ -296,11 +304,17 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
         if (relevantPieces.length === 0) return false;
       }
       
-      // Show legal normal move targets as potential split destinations
-      const normalMoves = legalMoves.filter(m => 
-        (m.type === 'normal' || m.type === 'capture') && (m as { from: number }).from === splitSource
+      // Show only valid split move targets (empty squares the piece can reach)
+      // Split moves are separate from normal moves - they can only go to empty squares
+      const splitMoves = legalMoves.filter(m => m.type === 'split' && m.from === splitSource);
+      
+      // Check if this square is a valid split target (appears in any split move as to1 or to2)
+      const isValidSplitTarget = splitMoves.some(m => 
+        m.type === 'split' && (m.to1 === square || m.to2 === square)
       );
-      return normalMoves.some(m => (m as { to: number }).to === square) && !splitTargets.includes(square);
+      
+      // Don't show already selected targets
+      return isValidSplitTarget && !splitTargets.includes(square);
     }
     
     // In merge mode, highlight valid merge targets
