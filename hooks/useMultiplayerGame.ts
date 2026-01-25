@@ -110,16 +110,24 @@ export function useMultiplayerGame(roomId: string | null) {
       const updateData: any = {
         game_state: newBoardState,
         move_history: newMoveHistory,
-        current_player: nextPlayer,
       };
 
-      // If game ended (checkmate/stalemate), update status and winner
-      if (gameStatus === 'checkmate') {
+      // If game ended, update status and winner
+      if (gameStatus === 'white-wins') {
         updateData.status = 'completed';
-        updateData.winner = playerColor; // Current player won
-      } else if (gameStatus === 'stalemate' || gameStatus === 'draw') {
+        updateData.winner = 'white';
+        console.log('Game ended - White wins!');
+      } else if (gameStatus === 'black-wins') {
+        updateData.status = 'completed';
+        updateData.winner = 'black';
+        console.log('Game ended - Black wins!');
+      } else if (gameStatus === 'draw') {
         updateData.status = 'completed';
         updateData.winner = 'draw';
+        console.log('Game ended - Draw');
+      } else {
+        // Game continues - switch turns
+        updateData.current_player = nextPlayer;
       }
 
       const { error } = await supabase
@@ -129,13 +137,17 @@ export function useMultiplayerGame(roomId: string | null) {
 
       if (error) throw error;
 
-      if (gameStatus === 'checkmate') {
-        toast.success('Checkmate!', {
-          description: 'You won the game!',
-        });
-      } else if (gameStatus === 'stalemate' || gameStatus === 'draw') {
+      if (gameStatus === 'white-wins' || gameStatus === 'black-wins') {
+        const didWin = (gameStatus === 'white-wins' && playerColor === 'white') || 
+                      (gameStatus === 'black-wins' && playerColor === 'black');
+        if (didWin) {
+          toast.success('Victory!', {
+            description: 'You won the game!',
+          });
+        }
+      } else if (gameStatus === 'draw') {
         toast.info('Game Draw', {
-          description: gameStatus === 'stalemate' ? 'Stalemate' : 'Draw',
+          description: 'The game ended in a draw',
         });
       }
     } catch (err: any) {

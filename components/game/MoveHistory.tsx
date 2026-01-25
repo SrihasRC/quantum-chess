@@ -33,7 +33,7 @@ function formatMove(move: Move): string {
   return `${from}-${to}`;
 }
 
-export function MoveHistory() {
+export function MoveHistory({ isMultiplayer = false }: { isMultiplayer?: boolean }) {
   const moveHistory = useGameStore((state) => state.moveHistory);
   const currentMoveIndex = useGameStore((state) => state.currentMoveIndex);
   const undoMove = useGameStore((state) => state.undoMove);
@@ -58,61 +58,65 @@ export function MoveHistory() {
             </Badge>
           )}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={undoMove}
-          disabled={!canUndo}
-          className="h-6 px-1.5 hover:cursor-pointer hover:text-accent sm:h-7 sm:px-2"
-          title="Undo last move"
-        >
-          <Undo2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-        </Button>
+        {!isMultiplayer && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={undoMove}
+            disabled={!canUndo}
+            className="h-6 px-1.5 hover:cursor-pointer hover:text-accent sm:h-7 sm:px-2"
+            title="Undo last move"
+          >
+            <Undo2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+          </Button>
+        )}
       </div>
       
-      {/* Navigation Controls */}
-      <div className="flex gap-0.5 mb-1 sm:mb-1.5 sm:gap-1">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={goToFirst}
-          disabled={isAtStart}
-          className="h-6 px-1 flex-1 hover:cursor-pointer hover:text-accent sm:h-7 sm:px-1.5"
-          title="Go to start"
-        >
-          <ChevronsLeft className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={goToPrevious}
-          disabled={isAtStart}
-          className="h-6 px-1 flex-1 hover:cursor-pointer hover:text-accent sm:h-7 sm:px-1.5"
-          title="Previous move"
-        >
-          <ChevronLeft className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={goToNext}
-          disabled={isAtEnd}
-          className="h-6 px-1 flex-1 hover:cursor-pointer hover:text-accent sm:h-7 sm:px-1.5"
-          title="Next move"
-        >
-          <ChevronRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={goToLast}
-          disabled={isAtEnd}
-          className="h-6 px-1 flex-1 hover:cursor-pointer hover:text-accent sm:h-7 sm:px-1.5"
-          title="Go to latest"
-        >
-          <ChevronsRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-        </Button>
-      </div>
+      {/* Navigation Controls - Hidden in multiplayer */}
+      {!isMultiplayer && (
+        <div className="flex gap-0.5 mb-1 sm:mb-1.5 sm:gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={goToFirst}
+            disabled={isAtStart}
+            className="h-6 px-1 flex-1 hover:cursor-pointer hover:text-accent sm:h-7 sm:px-1.5"
+            title="Go to start"
+          >
+            <ChevronsLeft className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={goToPrevious}
+            disabled={isAtStart}
+            className="h-6 px-1 flex-1 hover:cursor-pointer hover:text-accent sm:h-7 sm:px-1.5"
+            title="Previous move"
+          >
+            <ChevronLeft className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={goToNext}
+            disabled={isAtEnd}
+            className="h-6 px-1 flex-1 hover:cursor-pointer hover:text-accent sm:h-7 sm:px-1.5"
+            title="Next move"
+          >
+            <ChevronRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={goToLast}
+            disabled={isAtEnd}
+            className="h-6 px-1 flex-1 hover:cursor-pointer hover:text-accent sm:h-7 sm:px-1.5"
+            title="Go to latest"
+          >
+            <ChevronsRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+          </Button>
+        </div>
+      )}
       
       <div className="h-20 overflow-y-scroll scroll-hidden space-y-0.5 flex flex-col sm:h-28 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {moveHistory.length === 0 ? (
