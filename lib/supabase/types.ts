@@ -22,6 +22,7 @@ export interface Database {
           game_state: Json
           move_history: Json
           winner: 'white' | 'black' | 'draw' | null
+          winner_reason: 'checkmate' | 'resignation' | 'opponent_left' | 'draw' | null
         }
         Insert: {
           id?: string
@@ -33,6 +34,7 @@ export interface Database {
           game_state: Json
           move_history?: Json
           winner?: 'white' | 'black' | 'draw' | null
+          winner_reason?: 'checkmate' | 'resignation' | 'opponent_left' | 'draw' | null
         }
         Update: {
           id?: string
@@ -44,6 +46,7 @@ export interface Database {
           game_state?: Json
           move_history?: Json
           winner?: 'white' | 'black' | 'draw' | null
+          winner_reason?: 'checkmate' | 'resignation' | 'opponent_left' | 'draw' | null
         }
       }
     }

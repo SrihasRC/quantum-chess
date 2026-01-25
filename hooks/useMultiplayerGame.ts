@@ -28,28 +28,30 @@ export function useMultiplayerGame(roomId: string | null) {
   const createGame = useCallback(async () => {
     try {
       const initialBoard = createInitialBoardState();
-      const { data, error } = await supabase
+      const { data, error } = (await supabase
         .from('game_rooms')
         .insert({
           creator_id: playerId,
           status: 'waiting',
           current_player: 'white',
-          game_state: initialBoard as any,
+          game_state: initialBoard,
           move_history: [],
-        })
+        } as never)
         .select()
-        .single();
+        .single()) as { data: GameRoom | null; error: unknown };
 
       if (error) throw error;
+      if (!data) throw new Error('Failed to create game');
 
       toast.success('Game Created', {
         description: `Game ID: ${data.id.substring(0, 8)}`,
       });
 
       return data.id;
-    } catch (err: any) {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       toast.error('Failed to create game', {
-        description: err.message,
+        description: errorMessage,
       });
       throw err;
     }
@@ -59,13 +61,15 @@ export function useMultiplayerGame(roomId: string | null) {
   const joinGame = useCallback(async (gameId: string) => {
     try {
       // First, fetch the game to check if it's available
-      const { data: game, error: fetchError } = await supabase
+      const { data: game, error: fetchError } = (await supabase
         .from('game_rooms')
         .select('*')
         .eq('id', gameId)
-        .single();
+        .single()) as { data: GameRoom | null; error: unknown };
 
       if (fetchError) throw new Error('Game not found');
+      if (!game) throw new Error('Game not found');
+      
       if (game.status !== 'waiting') throw new Error('Game already started or completed');
       if (game.opponent_id) throw new Error('Game is full');
 
@@ -75,7 +79,7 @@ export function useMultiplayerGame(roomId: string | null) {
         .update({
           opponent_id: playerId,
           status: 'active',
-        })
+        } as never)
         .eq('id', gameId);
 
       if (updateError) throw updateError;
@@ -85,9 +89,10 @@ export function useMultiplayerGame(roomId: string | null) {
       });
 
       return gameId;
-    } catch (err: any) {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       toast.error('Failed to join game', {
-        description: err.message,
+        description: errorMessage,
       });
       throw err;
     }
@@ -105,9 +110,9 @@ export function useMultiplayerGame(roomId: string | null) {
 
     try {
       const newMoveHistory = [...gameRoom.move_history, moveEntry];
-      const nextPlayer = gameRoom.current_player === 'white' ? 'black' : 'white';
+      const nextPlayer = gameRoom.current_player === 'white' ? ('black' as const) : ('white' as const);
 
-      const updateData: any = {
+      const updateData: Partial<GameRoom> = {
         game_state: newBoardState,
         move_history: newMoveHistory,
       };
@@ -145,15 +150,16 @@ export function useMultiplayerGame(roomId: string | null) {
 
       const { error } = await supabase
         .from('game_rooms')
-        .update(updateData)
+        .update(updateData as never)
         .eq('id', gameRoom.id);
 
       if (error) throw error;
 
       // Don't show toast here - let the game room page handle the dialog
-    } catch (err: any) {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       toast.error('Failed to make move', {
-        description: err.message,
+        description: errorMessage,
       });
       throw err;
     }
@@ -164,7 +170,7 @@ export function useMultiplayerGame(roomId: string | null) {
     if (!gameRoom || !playerColor) return;
 
     try {
-      const winner = playerColor === 'white' ? 'black' : 'white';
+      const winner = playerColor === 'white' ? ('black' as const) : ('white' as const);
       
       const { error } = await supabase
         .from('game_rooms')
@@ -172,7 +178,7 @@ export function useMultiplayerGame(roomId: string | null) {
           status: 'completed',
           winner: winner,
           winner_reason: 'resignation',
-        })
+        } as never)
         .eq('id', gameRoom.id);
 
       if (error) throw error;
@@ -180,20 +186,21 @@ export function useMultiplayerGame(roomId: string | null) {
       toast.info('You resigned', {
         description: 'Opponent wins',
       });
-    } catch (err: any) {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       toast.error('Failed to resign', {
-        description: err.message,
+        description: errorMessage,
       });
       throw err;
     }
   }, [gameRoom, playerColor]);
 
   // End game (when player leaves)
-  const endGame = useCallback(async (reason: 'leave' | 'disconnect') => {
+  const endGame = useCallback(async () => {
     if (!gameRoom || !playerColor) return;
 
     try {
-      const winner = playerColor === 'white' ? 'black' : 'white';
+      const winner = playerColor === 'white' ? ('black' as const) : ('white' as const);
       
       const { error } = await supabase
         .from('game_rooms')
@@ -201,11 +208,11 @@ export function useMultiplayerGame(roomId: string | null) {
           status: 'completed',
           winner: winner,
           winner_reason: 'opponent_left',
-        })
+        } as never)
         .eq('id', gameRoom.id);
 
       if (error) throw error;
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to end game:', err);
     }
   }, [gameRoom, playerColor]);
@@ -219,15 +226,16 @@ export function useMultiplayerGame(roomId: string | null) {
 
     const fetchGame = async () => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = (await supabase
           .from('game_rooms')
           .select('*')
           .eq('id', roomId)
-          .single();
+          .single()) as { data: GameRoom | null; error: unknown };
 
         if (error) throw error;
+        if (!data) throw new Error('Game not found');
 
-        setGameRoom(data as GameRoom);
+        setGameRoom(data);
         
         // Determine player color
         if (data.creator_id === playerId) {
@@ -237,8 +245,9 @@ export function useMultiplayerGame(roomId: string | null) {
         }
 
         setLoading(false);
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        setError(errorMessage);
         setLoading(false);
       }
     };

@@ -49,7 +49,7 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
       
       if (isActive) {
         setOnNavigationAttempt(() => {
-          endGame('leave');
+          endGame();
         });
       } else {
         setOnNavigationAttempt(null);
@@ -191,7 +191,7 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
 
   const confirmLeave = async () => {
     if (gameRoom && gameRoom.status === 'active') {
-      await endGame('leave');
+      await endGame();
     }
     router.push('/multiplayer');
   };
@@ -210,7 +210,7 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
     return () => {
       // Use ref to get latest gameRoom state without re-running effect
       if (gameRoomRef.current && gameRoomRef.current.status === 'active') {
-        endGame('disconnect');
+        endGame();
       }
     };
   }, []); // Empty deps - only cleanup on unmount
@@ -355,12 +355,12 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
         </div>
       ) : (
         <div className="flex w-full flex-col items-center gap-3 sm:gap-4 md:flex-row md:gap-6 lg:gap-8">
-          <div className="flex w-full flex-col gap-2 shrink-0 md:w-auto">
+          <div className="flex flex-col gap-2 shrink-0 md:w-auto">
             <MoveModSelector mode={moveMode} onModeChange={setMoveMode} />
             
             {/* Turn Indicator */}
             {!isGameOver && (
-              <div className={`rounded-md border p-2 text-center text-sm ${isMyTurn ? 'bg-primary/10 border-primary' : 'bg-muted'}`}>
+              <div className={`rounded-md border p-2 text-center text-sm w-full min-w-37.5 ${isMyTurn ? 'bg-primary/10 border-primary' : 'bg-muted'}`}>
                 <div className="flex items-center justify-center gap-2">
                   <Clock className="h-4 w-4" />
                   <span className="font-medium">
