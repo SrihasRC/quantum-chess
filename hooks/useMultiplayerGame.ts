@@ -116,15 +116,28 @@ export function useMultiplayerGame(roomId: string | null) {
       if (gameStatus === 'white-wins') {
         updateData.status = 'completed';
         updateData.winner = 'white';
-        console.log('Game ended - White wins!');
+        updateData.winner_reason = 'checkmate';
+        if (playerColor === 'white') {
+          toast.success('You Won!', {
+            description: 'Victory by checkmate!',
+          });
+        }
       } else if (gameStatus === 'black-wins') {
         updateData.status = 'completed';
         updateData.winner = 'black';
-        console.log('Game ended - Black wins!');
+        updateData.winner_reason = 'checkmate';
+        if (playerColor === 'black') {
+          toast.success('You Won!', {
+            description: 'Victory by checkmate!',
+          });
+        }
       } else if (gameStatus === 'draw') {
         updateData.status = 'completed';
         updateData.winner = 'draw';
-        console.log('Game ended - Draw');
+        updateData.winner_reason = 'draw';
+        toast.info('Game Draw', {
+          description: 'The game ended in a draw',
+        });
       } else {
         // Game continues - switch turns
         updateData.current_player = nextPlayer;
@@ -137,19 +150,7 @@ export function useMultiplayerGame(roomId: string | null) {
 
       if (error) throw error;
 
-      if (gameStatus === 'white-wins' || gameStatus === 'black-wins') {
-        const didWin = (gameStatus === 'white-wins' && playerColor === 'white') || 
-                      (gameStatus === 'black-wins' && playerColor === 'black');
-        if (didWin) {
-          toast.success('Victory!', {
-            description: 'You won the game!',
-          });
-        }
-      } else if (gameStatus === 'draw') {
-        toast.info('Game Draw', {
-          description: 'The game ended in a draw',
-        });
-      }
+      // Don't show toast here - let the game room page handle the dialog
     } catch (err: any) {
       toast.error('Failed to make move', {
         description: err.message,
@@ -170,6 +171,7 @@ export function useMultiplayerGame(roomId: string | null) {
         .update({
           status: 'completed',
           winner: winner,
+          winner_reason: 'resignation',
         })
         .eq('id', gameRoom.id);
 
@@ -198,6 +200,7 @@ export function useMultiplayerGame(roomId: string | null) {
         .update({
           status: 'completed',
           winner: winner,
+          winner_reason: 'opponent_left',
         })
         .eq('id', gameRoom.id);
 
@@ -254,7 +257,6 @@ export function useMultiplayerGame(roomId: string | null) {
           filter: `id=eq.${roomId}`,
         },
         (payload) => {
-          console.log('Realtime update received:', payload);
           if (payload.new) {
             const newGameRoom = payload.new as GameRoom;
             setGameRoom(newGameRoom);
@@ -268,15 +270,9 @@ export function useMultiplayerGame(roomId: string | null) {
           }
         }
       )
-      .subscribe((status) => {
-        console.log('Subscription status:', status);
-        if (status === 'SUBSCRIBED') {
-          console.log('Successfully subscribed to game room updates');
-        }
-      });
+      .subscribe();
 
     return () => {
-      console.log('Unsubscribing from channel');
       supabase.removeChannel(channel);
     };
   }, [roomId, playerId]);

@@ -60,4 +60,5 @@ export interface GameRoom {
   game_state: BoardState;
   move_history: MoveHistoryEntry[];
   winner: 'white' | 'black' | 'draw' | null;
+  winner_reason?: 'checkmate' | 'resignation' | 'opponent_left' | 'draw' | null;
 }

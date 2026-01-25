@@ -72,7 +72,7 @@ export function MoveHistory({ isMultiplayer = false }: { isMultiplayer?: boolean
         )}
       </div>
       
-      {/* Navigation Controls - Hidden in multiplayer */}
+      {/* Navigation Controls - Hidden in multiplayer since we don't have board state history */}
       {!isMultiplayer && (
         <div className="flex gap-0.5 mb-1 sm:mb-1.5 sm:gap-1">
           <Button

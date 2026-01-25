@@ -19,9 +19,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useGameStore } from '@/lib/store/gameStore';
-import type { Move, SquareIndex, BoardState } from '@/lib/types';
+import type { Move, SquareIndex } from '@/lib/types';
 import { toast } from 'sonner';
-import { cloneBoardState } from '@/lib/engine/state';
+import { useNavigationGuardStore } from '@/lib/store/navigationGuardStore';
 
 export default function MultiplayerGameRoom({ params }: { params: Promise<{ roomId: string }> }) {
   const resolvedParams = use(params);
@@ -33,17 +33,39 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
   const [showResignDialog, setShowResignDialog] = useState(false);
   const [showGameOverDialog, setShowGameOverDialog] = useState(false);
   const gameRoomRef = useRef(gameRoom);
+  const setShouldBlockNavigation = useNavigationGuardStore((state) => state.setShouldBlockNavigation);
+  const setOnNavigationAttempt = useNavigationGuardStore((state) => state.setOnNavigationAttempt);
   
   // Keep ref updated
   useEffect(() => {
     gameRoomRef.current = gameRoom;
   }, [gameRoom]);
+
+  // Set navigation guard when game is active
+  useEffect(() => {
+    if (gameRoom) {
+      const isActive = gameRoom.status === 'active';
+      setShouldBlockNavigation(isActive);
+      
+      if (isActive) {
+        setOnNavigationAttempt(() => {
+          endGame('leave');
+        });
+      } else {
+        setOnNavigationAttempt(null);
+      }
+    }
+    return () => {
+      setShouldBlockNavigation(false);
+      setOnNavigationAttempt(null);
+    };
+  }, [gameRoom, setShouldBlockNavigation, setOnNavigationAttempt, endGame]);
   
-  const board = useGameStore((state) => state.board);
-  const status = useGameStore((state) => state.status);
-  const moveHistory = useGameStore((state) => state.moveHistory);
-  const movePiece = useGameStore((state) => state.movePiece);
-  const resetSelection = useGameStore((state) => state.resetSelection);
+  // const board = useGameStore((state) => state.board);
+  // const status = useGameStore((state) => state.status);
+  // const moveHistory = useGameStore((state) => state.moveHistory);
+  // const movePiece = useGameStore((state) => state.movePiece);
+  // const resetSelection = useGameStore((state) => state.resetSelection);
 
   // Save/restore game state to isolate multiplayer from local mode
   useEffect(() => {
@@ -68,8 +90,7 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
         board: gameRoom.game_state,
         moveHistory: gameRoom.move_history || [],
         currentMoveIndex: (gameRoom.move_history?.length || 0) - 1,
-        // Disable move navigation in multiplayer by keeping empty history
-        // This prevents errors when trying to navigate moves
+        // Disable move navigation in multiplayer - we don't have intermediate board states
         boardStateHistory: [],
       };
       
@@ -79,7 +100,7 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
       const isTerminalState = currentStatus === 'white-wins' || currentStatus === 'black-wins' || currentStatus === 'draw';
       
       if (gameRoom.status === 'completed' && !isTerminalState) {
-        // Game just ended, set appropriate status and show dialog
+        // Game just ended, always show dialog for both win and loss
         if (gameRoom.winner === 'draw') {
           updateData.status = 'draw';
         } else if (gameRoom.winner === 'white') {
@@ -148,8 +169,6 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
 
           // Check if game ended (white-wins, black-wins, draw)
           const isGameOver = gameStatus === 'white-wins' || gameStatus === 'black-wins' || gameStatus === 'draw';
-          
-          console.log('After move - Status:', gameStatus, 'IsGameOver:', isGameOver);
 
           // Sync to server with game status
           makeMove(move, newBoard, lastMoveEntry, isGameOver ? gameStatus : undefined);
@@ -196,6 +215,39 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
     };
   }, []); // Empty deps - only cleanup on unmount
 
+  // Prevent navigation away from page during active game
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (gameRoom && gameRoom.status === 'active') {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+
+    // const handleRouteChange = () => {
+    //   if (gameRoom && gameRoom.status === 'active') {
+    //     const shouldLeave = window.confirm(
+    //       'If you leave now, your opponent will be declared the winner. Are you sure you want to leave?'
+    //     );
+    //     if (!shouldLeave) {
+    //       throw 'Route change aborted';
+    //     } else {
+    //       endGame('leave');
+    //     }
+    //   }
+    // };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    // Note: Next.js 13+ App Router doesn't have router events like Pages Router
+    // The beforeunload event will catch browser navigation, tab closes, etc.
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [gameRoom, endGame]);
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -228,13 +280,35 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
 
   // Determine winner message
   let winnerMessage = '';
+  let winReasonMessage = '';
   if (isGameOver) {
     if (gameRoom.winner === 'draw') {
       winnerMessage = 'Game Draw';
+      winReasonMessage = 'The game ended in a draw';
     } else if (gameRoom.winner === playerColor) {
       winnerMessage = 'You Won!';
+      // Determine reason
+      if (gameRoom.winner_reason === 'checkmate') {
+        winReasonMessage = 'Victory by checkmate!';
+      } else if (gameRoom.winner_reason === 'resignation') {
+        winReasonMessage = 'Opponent resigned';
+      } else if (gameRoom.winner_reason === 'opponent_left') {
+        winReasonMessage = 'Opponent left the game';
+      } else {
+        winReasonMessage = 'Congratulations!';
+      }
     } else {
       winnerMessage = 'You Lost';
+      // Determine reason
+      if (gameRoom.winner_reason === 'checkmate') {
+        winReasonMessage = 'Defeated by checkmate';
+      } else if (gameRoom.winner_reason === 'resignation') {
+        winReasonMessage = 'You resigned';
+      } else if (gameRoom.winner_reason === 'opponent_left') {
+        winReasonMessage = 'You left the game';
+      } else {
+        winReasonMessage = 'Better luck next time';
+      }
     }
   }
 
@@ -317,8 +391,7 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
               {winnerMessage}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-center">
-              {gameRoom?.winner === 'draw' ? 'The game ended in a draw' : 
-               gameRoom?.winner === playerColor ? 'Congratulations on your victory!' : 'Better luck next time'}
+              {winReasonMessage}
             </AlertDialogDescription>
             <p className="text-center text-xs text-muted-foreground mt-2">
               Total moves: {gameRoom?.move_history?.length || 0}
