@@ -1,103 +1,82 @@
 import Link from "next/link";
 import {
-  Crown,
-  ArrowLeft,
   Lightbulb,
   Target,
   Link2,
   Scale,
   Dices,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Header } from "@/components/layout/Header";
 
 export default function RulesPage() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex h-screen flex-col overflow-hidden">
       {/* Header */}
-      <div className="sticky top-0 z-50 border-b border-border bg-card">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg">
-              <Crown className="h-5 w-5 text-primary" />
-            </div>
-            <Link href="/" className="text-xl font-bold">
-              Quantum Chess
-            </Link>
-          </div>
-          <Link href="/">
-            <Button
-              variant="outline"
-              size="sm"
-              className="hover:cursor-pointer hover:text-accent"
-            >
-              <ArrowLeft className="h-4 w-4 mr-1.5" />
-              Back to Game
-            </Button>
-          </Link>
-        </div>
-      </div>
+      <Header />
+      
       {/* Main Content */}
-      <div className="container mx-auto px-3 py-4 sm:px-4 sm:py-6 lg:px-6 lg:py-8">
-        <div className="flex gap-4 max-w-7xl mx-auto md:gap-6 lg:gap-8">
-          {/* Sidebar TOC - Hidden on mobile, fixed on desktop */}
-          <aside className="hidden lg:block w-56 shrink-0 xl:w-64">
-            <nav className="sticky top-24 space-y-1">
-              <h2 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">
-                On This Page
-              </h2>
-              <div className="space-y-1 text-sm border-l-2 border-border">
-                <a
-                  href="#basic-rules"
-                  className="block py-1.5 px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-l-2 border-transparent hover:border-primary -ml-px"
-                >
-                  Basic Rules
-                </a>
-                <a
-                  href="#movement-types"
-                  className="block py-1.5 px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-l-2 border-transparent hover:border-primary -ml-px"
-                >
-                  Movement Types
-                </a>
-                <a
-                  href="#quantum-mechanics"
-                  className="block py-1.5 px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-l-2 border-transparent hover:border-primary -ml-px"
-                >
-                  Quantum Mechanics
-                </a>
-                <a
-                  href="#special-rules"
-                  className="block py-1.5 px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-l-2 border-transparent hover:border-primary -ml-px"
-                >
-                  Special Rules
-                </a>
-                <a
-                  href="#strategy-tips"
-                  className="block py-1.5 px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-l-2 border-transparent hover:border-primary -ml-px"
-                >
-                  Strategy Tips
-                </a>
-                <a
-                  href="#examples"
-                  className="block py-1.5 px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-l-2 border-transparent hover:border-primary -ml-px"
-                >
-                  Quick Examples
-                </a>
-              </div>
-            </nav>
-          </aside>
-          {/* Main Content Area */}
-          <div className="flex-1 min-w-0 max-w-3xl">
-            <div className="space-y-8 sm:space-y-12">
-              {/* Title */}
-              <div className="space-y-2">
-                <h1 className="text-4xl font-bold tracking-tight">
-                  Game Rules
-                </h1>
-                <p className="text-muted-foreground text-lg">
-                  Learn how to play Quantum Chess with superposition and
-                  entanglement
-                </p>
-              </div>
+      <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-4 sm:py-6 lg:px-6 lg:py-8">
+        <div className="container mx-auto max-w-7xl">
+          <div className="flex gap-4 md:gap-6 lg:gap-8">
+            {/* Sidebar TOC - Hidden on mobile, fixed on desktop */}
+            <aside className="hidden lg:block w-56 shrink-0 xl:w-64">
+              <nav className="sticky top-24 space-y-1">
+                <h2 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">
+                  On This Page
+                </h2>
+                <div className="space-y-1 text-sm border-l-2 border-border">
+                  <a
+                    href="#basic-rules"
+                    className="block py-1.5 px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-l-2 border-transparent hover:border-primary -ml-px"
+                  >
+                    Basic Rules
+                  </a>
+                  <a
+                    href="#movement-types"
+                    className="block py-1.5 px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-l-2 border-transparent hover:border-primary -ml-px"
+                  >
+                    Movement Types
+                  </a>
+                  <a
+                    href="#quantum-mechanics"
+                    className="block py-1.5 px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-l-2 border-transparent hover:border-primary -ml-px"
+                  >
+                    Quantum Mechanics
+                  </a>
+                  <a
+                    href="#special-rules"
+                    className="block py-1.5 px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-l-2 border-transparent hover:border-primary -ml-px"
+                  >
+                    Special Rules
+                  </a>
+                  <a
+                    href="#strategy-tips"
+                    className="block py-1.5 px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-l-2 border-transparent hover:border-primary -ml-px"
+                  >
+                    Strategy Tips
+                  </a>
+                  <a
+                    href="#examples"
+                    className="block py-1.5 px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-l-2 border-transparent hover:border-primary -ml-px"
+                  >
+                    Quick Examples
+                  </a>
+                </div>
+              </nav>
+            </aside>
+            {/* Main Content Area */}
+            <div className="flex-1 min-w-0 max-w-3xl">
+              <div className="space-y-8 sm:space-y-12">
+                {/* Title */}
+                <div className="space-y-2">
+                  <h1 className="text-4xl font-bold tracking-tight">
+                    Game Rules
+                  </h1>
+                  <p className="text-muted-foreground text-lg">
+                    Learn how to play Quantum Chess with superposition and
+                    entanglement
+                  </p>
+                </div>
 
               {/* Basic Rules */}
               <section id="basic-rules" className="space-y-4 scroll-mt-20">
@@ -528,6 +507,7 @@ export default function RulesPage() {
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 }

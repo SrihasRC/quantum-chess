@@ -13,6 +13,7 @@ interface SquareProps {
   isLastMoveTo?: boolean;
   isFailedCaptureFrom?: boolean;
   isFailedCaptureTo?: boolean;
+  flipped?: boolean;
   onClick: () => void;
   children?: React.ReactNode;
 }
@@ -26,15 +27,16 @@ export function Square({
   isLastMoveTo = false,
   isFailedCaptureFrom = false,
   isFailedCaptureTo = false,
+  flipped = false,
   onClick,
   children,
 }: SquareProps) {
   const file = getFile(index);
   const rank = getRank(index);
   
-  // Show labels on edge squares
-  const showFileLabel = rank === 0;
-  const showRankLabel = file === 0;
+  // Show labels on edge squares - adjust based on flip state
+  const showFileLabel = flipped ? rank === 7 : rank === 0;
+  const showRankLabel = flipped ? file === 7 : file === 0;
 
   return (
     <div

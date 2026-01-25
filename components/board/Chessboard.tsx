@@ -443,6 +443,7 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
             isLastMoveTo={isLastMoveTo}
             isFailedCaptureFrom={isFailedCaptureFrom}
             isFailedCaptureTo={isFailedCaptureTo}
+            flipped={flipped}
             onClick={() => handleSquareClick(index)}
           >
             {piece && (

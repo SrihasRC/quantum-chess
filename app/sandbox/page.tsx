@@ -29,13 +29,28 @@ export default function SandboxPage() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const undoMove = useGameStore((state) => state.undoMove);
 
-  // Enable sandbox mode on mount
+  // Enable sandbox mode on mount and initialize with empty board
   useEffect(() => {
+    // Save the current game state before entering sandbox
+    const currentState = useGameStore.getState();
+    const savedBoard = currentState.board;
+    const savedHistory = currentState.boardStateHistory;
+    const savedMoves = currentState.moveHistory;
+    const savedIndex = currentState.currentMoveIndex;
+    
+    // Initialize sandbox with standard starting position
+    useGameStore.getState().newGame();
     useGameStore.setState({ sandboxMode: true });
+    
     return () => {
-      // Disable sandbox mode and reset board when leaving
-      useGameStore.setState({ sandboxMode: false });
-      useGameStore.getState().newGame();
+      // Restore the saved state when leaving sandbox
+      useGameStore.setState({ 
+        sandboxMode: false,
+        board: savedBoard,
+        boardStateHistory: savedHistory,
+        moveHistory: savedMoves,
+        currentMoveIndex: savedIndex,
+      });
     };
   }, []);
 
@@ -100,6 +115,9 @@ export default function SandboxPage() {
           ...currentBoard,
           pieces: currentBoard.pieces.filter((p) => p.id !== pieceToRemove.id),
         },
+        // Clear selection and legal moves when deleting a piece
+        selectedSquare: null,
+        legalMoves: [],
       });
       return;
     }
