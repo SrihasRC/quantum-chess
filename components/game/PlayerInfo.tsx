@@ -3,7 +3,6 @@
 import { ReactNode } from 'react';
 import { useGameStore } from '@/lib/store/gameStore';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Circle } from 'lucide-react';
 
 interface PlayerInfoProps {

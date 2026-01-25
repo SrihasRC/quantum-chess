@@ -463,7 +463,7 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
 
   return (
     <>
-      <div className="w-full max-w-xl">
+      <div className="w-sm md:w-xl">
         <div className="aspect-square w-full overflow-hidden rounded-md border-2 shadow-lg sm:rounded-lg sm:border-4 sm:shadow-xl">
           <div className="grid h-full w-full grid-cols-8 grid-rows-8">
             {renderSquares()}

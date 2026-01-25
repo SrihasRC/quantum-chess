@@ -15,17 +15,19 @@ export function GameContainer({ children, gameControls }: GameContainerProps) {
     <div className="flex h-screen flex-col overflow-hidden">
       <Header />
       
-      <main className="flex-1 overflow-y-auto px-3 py-3 justify-center items-center sm:px-4 sm:py-4 lg:px-6 lg:py-6">
-        <div className="h-full flex flex-col lg:flex-row justify-center items-center lg:gap-6">
+      <main className="flex-1 flex overflow-y-auto items-center justify-center px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6">
+        <div className="w-full flex flex-col lg:flex-row items-center justify-center gap-3 lg:gap-6">
           {/* Main Game Area */}
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center w-auto">
             {children}
           </div>
 
           {/* Side Panel - horizontal on mobile, vertical on desktop */}
-          <aside className="grid grid-cols-1 gap-3 sm:grid-cols-1 lg:grid-cols-1 lg:space-y-0">
+          <aside className="grid grid-cols-2 gap-3 lg:grid-cols-1 w-sm lg:w-87.5">
             <PlayerInfo gameControls={gameControls} />
-            <MoveHistory />
+            <div className="sm:col-span-2 lg:col-span-1">
+              <MoveHistory />
+            </div>
           </aside>
         </div>
       </main>
