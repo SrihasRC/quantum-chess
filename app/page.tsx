@@ -73,7 +73,7 @@ export default function HomePage() {
                     <Users className="h-5 w-5 text-muted-foreground" />
                     <div>
                       <h4 className="text-sm font-medium">Multiplayer</h4>
-                      <p className="text-xs text-muted-foreground">Play online (coming soon)</p>
+                      <p className="text-xs text-muted-foreground">Play online</p>
                     </div>
                   </div>
                 </Card>
