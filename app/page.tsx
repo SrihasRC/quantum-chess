@@ -4,14 +4,21 @@ import { Users, Sparkles, BookOpen, FlaskConical } from 'lucide-react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Header } from '@/components/layout/Header';
+import PixelBlast from '@/components/PixelBlast';
 
 export default function HomePage() {
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <div className="flex h-screen flex-col overflow-hidden relative">
+      {/* Background Effect */}
+      <div className="absolute inset-0 z-0">
+        <PixelBlast  />
+      </div>
+      
       <Header />
 
       {/* Main Content */}
-      <main className="container mx-auto flex flex-1 items-center justify-center overflow-y-auto px-3 py-6 sm:px-4 sm:py-8">
+      <main className="container mx-auto flex flex-1 items-center justify-center overflow-y-auto px-3 py-6 sm:px-4 sm:py-8 relative z-10">
+        
         <div className="grid w-full max-w-6xl gap-6 lg:grid-cols-[1fr_400px] lg:gap-8">
           {/* Left Side - Hero Section */}
           <div className="flex flex-col justify-center space-y-6">
@@ -55,7 +62,7 @@ export default function HomePage() {
             <div className="space-y-3">
               {/* Local Game */}
               <Link href="/local" className="block">
-                <Card className="border p-4 transition-colors hover:bg-accent">
+                <Card className="border p-4 transition-colors opacity-90 hover:bg-accent">
                   <div className="flex items-center gap-3">
                     <Sparkles className="h-5 w-5 text-muted-foreground" />
                     <div>
@@ -68,7 +75,7 @@ export default function HomePage() {
 
               {/* Multiplayer */}
               <Link href="/multiplayer" className="block">
-                <Card className="border p-4 transition-colors hover:bg-accent">
+                <Card className="border p-4 transition-colors opacity-90 hover:bg-accent">
                   <div className="flex items-center gap-3">
                     <Users className="h-5 w-5 text-muted-foreground" />
                     <div>
@@ -81,7 +88,7 @@ export default function HomePage() {
 
               {/* Sandbox Mode */}
               <Link href="/sandbox" className="block">
-                <Card className="border p-4 transition-colors hover:bg-accent">
+                <Card className="border p-4 transition-colors opacity-90 hover:bg-accent">
                   <div className="flex items-center gap-3">
                     <FlaskConical className="h-5 w-5 text-muted-foreground" />
                     <div>
@@ -94,7 +101,7 @@ export default function HomePage() {
 
               {/* How to Play */}
               <Link href="/rules" className="block">
-                <Card className="border p-4 transition-colors hover:bg-accent">
+                <Card className="border p-4 transition-colors opacity-90 hover:bg-accent">
                   <div className="flex items-center gap-3">
                     <BookOpen className="h-5 w-5 text-muted-foreground" />
                     <div>
