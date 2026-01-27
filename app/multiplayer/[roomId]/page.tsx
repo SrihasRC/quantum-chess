@@ -27,11 +27,15 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
   const resolvedParams = use(params);
   const roomId = resolvedParams.roomId;
   const router = useRouter();
-  const { gameRoom, playerColor, loading, error, makeMove, resignGame, endGame } = useMultiplayerGame(roomId);
+  const { gameRoom, playerColor, loading, error, makeMove, resignGame, endGame, setPlayerReady } = useMultiplayerGame(roomId);
+  const resetSelection = useGameStore((state) => state.resetSelection);
+  const moveHistory = useGameStore((state) => state.moveHistory);
   const [moveMode, setMoveMode] = useState<MoveMode>('classic');
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [showResignDialog, setShowResignDialog] = useState(false);
   const [showGameOverDialog, setShowGameOverDialog] = useState(false);
+  const [lastMoveCount, setLastMoveCount] = useState(0);
+  const [hasSetReady, setHasSetReady] = useState(false);
   const gameRoomRef = useRef(gameRoom);
   const setShouldBlockNavigation = useNavigationGuardStore((state) => state.setShouldBlockNavigation);
   const setOnNavigationAttempt = useNavigationGuardStore((state) => state.setOnNavigationAttempt);
@@ -41,10 +45,34 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
     gameRoomRef.current = gameRoom;
   }, [gameRoom]);
 
+  // Set player as ready when they enter the room (only once)
+  useEffect(() => {
+    if (gameRoom && playerColor && !hasSetReady) {
+      setPlayerReady();
+      setHasSetReady(true);
+    }
+  }, [gameRoom?.id, playerColor, hasSetReady, setPlayerReady]);
+
+  // Reset selection when move mode changes
+  useEffect(() => {
+    resetSelection();
+  }, [moveMode, resetSelection]);
+
+  // Reset mode to classic after each move
+  useEffect(() => {
+    if (moveHistory.length > lastMoveCount) {
+      setMoveMode('classic');
+      setLastMoveCount(moveHistory.length);
+    } else if (lastMoveCount === 0 && moveHistory.length > 0) {
+      // Initialize lastMoveCount if this is the first sync
+      setLastMoveCount(moveHistory.length);
+    }
+  }, [moveHistory.length, lastMoveCount]);
+
   // Set navigation guard when game is active
   useEffect(() => {
     if (gameRoom) {
-      const isActive = gameRoom.status === 'active';
+      const isActive = gameRoom.status === 'active' || (gameRoom.creator_ready && gameRoom.opponent_ready);
       setShouldBlockNavigation(isActive);
       
       if (isActive) {
@@ -135,6 +163,12 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
           return;
         }
         
+        // Don't allow moves if both players aren't ready yet
+        if (!gameRoom.creator_ready || !gameRoom.opponent_ready) {
+          toast.error("Waiting for opponent...");
+          return;
+        }
+        
         // Check if it's player's turn before allowing selection
         if (gameRoom.current_player !== playerColor) {
           toast.error("Not your turn!");
@@ -147,6 +181,12 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
         // Don't allow moves if game is over
         if (gameRoom.status === 'completed') {
           toast.error("Game is over!");
+          return;
+        }
+        
+        // Don't allow moves if both players aren't ready yet
+        if (!gameRoom.creator_ready || !gameRoom.opponent_ready) {
+          toast.error("Waiting for opponent...");
           return;
         }
         
@@ -274,7 +314,7 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
     );
   }
 
-  const isWaiting = gameRoom.status === 'waiting';
+  const isWaiting = gameRoom.status === 'waiting' || !gameRoom.creator_ready || !gameRoom.opponent_ready;
   const isGameOver = gameRoom.status === 'completed';
   const isMyTurn = gameRoom.current_player === playerColor;
 

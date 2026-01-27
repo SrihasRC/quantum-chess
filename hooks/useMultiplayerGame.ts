@@ -73,12 +73,11 @@ export function useMultiplayerGame(roomId: string | null) {
       if (game.status !== 'waiting') throw new Error('Game already started or completed');
       if (game.opponent_id) throw new Error('Game is full');
 
-      // Update game with opponent
+      // Update game with opponent (but don't set to active yet)
       const { error: updateError } = await supabase
         .from('game_rooms')
         .update({
           opponent_id: playerId,
-          status: 'active',
         } as never)
         .eq('id', gameId);
 
@@ -97,6 +96,41 @@ export function useMultiplayerGame(roomId: string | null) {
       throw err;
     }
   }, [playerId]);
+
+  // Set player as ready when they enter the room
+  const setPlayerReady = useCallback(async () => {
+    if (!gameRoom || !playerColor) return;
+
+    try {
+      const updateData: any = {};
+      
+      if (playerColor === 'white') {
+        updateData.creator_ready = true;
+      } else {
+        updateData.opponent_ready = true;
+      }
+
+      // Check if both players will be ready after this update
+      const bothReady = playerColor === 'white' 
+        ? gameRoom.opponent_ready 
+        : gameRoom.creator_ready;
+
+      // If both players are ready, set status to active
+      if (bothReady) {
+        updateData.status = 'active';
+      }
+
+      const { error } = await supabase
+        .from('game_rooms')
+        .update(updateData as never)
+        .eq('id', gameRoom.id);
+
+      if (error) throw error;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      console.error('Failed to set player ready:', errorMessage);
+    }
+  }, [gameRoom, playerColor]);
 
   // Make a move
   const makeMove = useCallback(async (move: Move, newBoardState: BoardState, moveEntry: MoveHistoryEntry, gameStatus?: string) => {
@@ -297,5 +331,6 @@ export function useMultiplayerGame(roomId: string | null) {
     makeMove,
     resignGame,
     endGame,
+    setPlayerReady,
   };
 }

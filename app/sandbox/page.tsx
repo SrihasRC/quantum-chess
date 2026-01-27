@@ -24,6 +24,22 @@ export default function SandboxPage() {
   const [selectedPieceForPlacement, setSelectedPieceForPlacement] =
     useState<PieceSymbol | null>(null);
   const [moveMode, setMoveMode] = useState<MoveMode>("classic");
+  const resetSelection = useGameStore((state) => state.resetSelection);
+  const moveHistory = useGameStore((state) => state.moveHistory);
+  const [lastMoveCount, setLastMoveCount] = useState(0);
+
+  // Reset selection when move mode changes
+  useEffect(() => {
+    resetSelection();
+  }, [moveMode, resetSelection]);
+
+  // Reset mode to classic after each move
+  useEffect(() => {
+    if (moveHistory.length > lastMoveCount) {
+      setMoveMode('classic');
+      setLastMoveCount(moveHistory.length);
+    }
+  }, [moveHistory.length, lastMoveCount]);
   const [flipped, setFlipped] = useState(false);
   const [deleteMode, setDeleteMode] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);

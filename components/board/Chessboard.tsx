@@ -111,6 +111,30 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
       }
     } else if (splitTargets.length < 2) {
       // Second and third clicks: select targets
+      // Check if clicked square has a piece - if so, switch selection to that piece
+      let pieceAtSquare = getPieceAt(board, square);
+      
+      if (!pieceAtSquare) {
+        const superposedPieces = getPiecesAtSquare(board, square);
+        const relevantPieces = sandboxMode
+          ? superposedPieces
+          : superposedPieces.filter(p => p.color === board.activeColor);
+        
+        if (relevantPieces.length > 0) {
+          pieceAtSquare = relevantPieces[0];
+        }
+      }
+      
+      // If there's a piece and it belongs to the player, switch selection to it
+      if (pieceAtSquare && (sandboxMode || pieceAtSquare.color === board.activeColor)) {
+        // Reset split state and select the new piece
+        setSplitSource(square);
+        setSplitTargets([]);
+        selectPiece(square);
+        return;
+      }
+      
+      // No piece at this square, treat it as a target for split move
       if (square !== splitSource && !splitTargets.includes(square)) {
         const newTargets = [...splitTargets, square];
         setSplitTargets(newTargets);

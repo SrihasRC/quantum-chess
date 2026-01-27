@@ -34,6 +34,7 @@ import {
 import {
   getSquaresBetween,
   indexToAlgebraic,
+  getRank,
 } from './utils';
 import {
   wouldViolateDoubleOccupancy,
@@ -297,6 +298,16 @@ function generateSplitMoves(
   fromSquare: SquareIndex
 ): SplitMove[] {
   const moves: SplitMove[] = [];
+  
+  // Special restriction for pawns: only allow split from starting position
+  if (piece.type === 'P') {
+    const rank = getRank(fromSquare);
+    const startRank = piece.color === 'white' ? 1 : 6;
+    if (rank !== startRank) {
+      // Pawn has moved from starting position, no split moves allowed
+      return moves;
+    }
+  }
   
   // Get all valid target squares
   const targets = getPieceTargetSquares(piece.type, fromSquare, piece.color);

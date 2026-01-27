@@ -23,6 +23,8 @@ export interface Database {
           move_history: Json
           winner: 'white' | 'black' | 'draw' | null
           winner_reason: 'checkmate' | 'resignation' | 'opponent_left' | 'draw' | null
+          creator_ready: boolean
+          opponent_ready: boolean
         }
         Insert: {
           id?: string
@@ -35,6 +37,8 @@ export interface Database {
           move_history?: Json
           winner?: 'white' | 'black' | 'draw' | null
           winner_reason?: 'checkmate' | 'resignation' | 'opponent_left' | 'draw' | null
+          creator_ready?: boolean
+          opponent_ready?: boolean
         }
         Update: {
           id?: string
@@ -47,6 +51,8 @@ export interface Database {
           move_history?: Json
           winner?: 'white' | 'black' | 'draw' | null
           winner_reason?: 'checkmate' | 'resignation' | 'opponent_left' | 'draw' | null
+          creator_ready?: boolean
+          opponent_ready?: boolean
         }
       }
     }
@@ -64,4 +70,6 @@ export interface GameRoom {
   move_history: MoveHistoryEntry[];
   winner: 'white' | 'black' | 'draw' | null;
   winner_reason?: 'checkmate' | 'resignation' | 'opponent_left' | 'draw' | null;
+  creator_ready: boolean;
+  opponent_ready: boolean;
 }
