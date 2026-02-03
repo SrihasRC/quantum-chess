@@ -111,24 +111,6 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
   // const movePiece = useGameStore((state) => state.movePiece);
   // const resetSelection = useGameStore((state) => state.resetSelection);
 
-  // Save/restore game state to isolate multiplayer from local mode
-  useEffect(() => {
-    // Save current game state when entering multiplayer
-    const savedState = {
-      board: useGameStore.getState().board,
-      moveHistory: useGameStore.getState().moveHistory,
-      currentMoveIndex: useGameStore.getState().currentMoveIndex,
-      status: useGameStore.getState().status,
-    };
-
-    return () => {
-      // Only restore saved state when leaving if the game wasn't completed
-      if (gameRoomRef.current?.status !== 'completed') {
-        useGameStore.setState(savedState);
-      }
-    };
-  }, []);
-
   // Sync game state from multiplayer to local store
   useEffect(() => {
     if (gameRoom && gameRoom.game_state) {
@@ -136,13 +118,11 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
         board: gameRoom.game_state,
         moveHistory: gameRoom.move_history || [],
         currentMoveIndex: (gameRoom.move_history?.length || 0) - 1,
-        // Disable move navigation in multiplayer - we don't have intermediate board states
         boardStateHistory: [],
       };
       
-      // Always sync status from database
+      // Update status based on game state
       if (gameRoom.status === 'completed') {
-        // Game ended - set the correct terminal state
         if (gameRoom.winner === 'draw') {
           updateData.status = 'draw';
         } else if (gameRoom.winner === 'white') {
@@ -151,19 +131,19 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
           updateData.status = 'black-wins';
         }
         
-        // Show dialog only once when game ends (not on every sync or refresh)
+        // Show dialog on first transition to completed
         const currentStatus = useGameStore.getState().status;
-        const wasActive = currentStatus === 'active' || currentStatus === 'check';
-        if (wasActive) {
+        if (currentStatus === 'active' || currentStatus === 'check') {
           setShowGameOverDialog(true);
         }
-      } else if (gameRoom.status === 'active') {
+      } else {
         updateData.status = 'active';
       }
       
       useGameStore.setState(updateData);
     }
   }, [gameRoom]);
+
 
   // Intercept piece selection and moves to enforce turn-based play
   useEffect(() => {
