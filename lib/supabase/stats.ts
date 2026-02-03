@@ -56,13 +56,38 @@ export async function getLeaderboard(limit = 50): Promise<PlayerStats[]> {
   try {
     const { data, error } = await supabase
       .from('player_stats')
-      .select('*')
-      .order('points', { ascending: false })
-      .order('wins', { ascending: false })
-      .limit(limit) as { data: PlayerStats[] | null; error: unknown };
+      .select('*') as { data: PlayerStats[] | null; error: unknown };
 
     if (error) throw error;
-    return data || [];
+    
+    if (!data) return [];
+    
+    // Sort with proper tie-breaking:
+    // 1. Points (higher better)
+    // 2. Win rate (higher better)
+    // 3. Total wins (higher better)
+    // 4. Losses (lower better)
+    // 5. Games played (lower better for same performance)
+    const sorted = data.sort((a, b) => {
+      // 1. Points
+      if (b.points !== a.points) return b.points - a.points;
+      
+      // 2. Win rate
+      const aWinRate = a.games_played > 0 ? a.wins / a.games_played : 0;
+      const bWinRate = b.games_played > 0 ? b.wins / b.games_played : 0;
+      if (bWinRate !== aWinRate) return bWinRate - aWinRate;
+      
+      // 3. Total wins
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      
+      // 4. Fewer losses
+      if (a.losses !== b.losses) return a.losses - b.losses;
+      
+      // 5. Fewer games (efficiency)
+      return a.games_played - b.games_played;
+    });
+    
+    return sorted.slice(0, limit);
   } catch (error) {
     console.error('Failed to fetch leaderboard:', error);
     throw error;

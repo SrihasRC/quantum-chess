@@ -364,6 +364,12 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
   const isGameOver = gameRoom.status === 'completed';
   const isMyTurn = gameRoom.current_player === playerColor;
 
+  // Get player usernames
+  const whiteUsername = gameRoom.creator_username || 'White';
+  const blackUsername = gameRoom.opponent_username || 'Black';
+  const myUsername = playerColor === 'white' ? whiteUsername : blackUsername;
+  const opponentUsername = playerColor === 'white' ? blackUsername : whiteUsername;
+
   // Determine winner message
   let winnerMessage = '';
   let winReasonMessage = '';
@@ -375,33 +381,21 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
       } else {
         winReasonMessage = 'The game ended in a draw';
       }
-    } else if (gameRoom.winner === playerColor) {
-      winnerMessage = 'You Won!';
+    } else {
+      const winnerUsername = gameRoom.winner === 'white' ? whiteUsername : blackUsername;
+      winnerMessage = `${winnerUsername} Won!`;
+      
       // Determine reason
       if (gameRoom.winner_reason === 'checkmate') {
-        winReasonMessage = 'Victory by checkmate!';
+        winReasonMessage = 'Victory by checkmate';
       } else if (gameRoom.winner_reason === 'resignation') {
-        winReasonMessage = 'Opponent resigned';
+        winReasonMessage = 'Won by resignation';
       } else if (gameRoom.winner_reason === 'opponent_left') {
         winReasonMessage = 'Opponent left the game';
       } else if (gameRoom.winner_reason === 'timeout') {
-        winReasonMessage = 'Opponent ran out of time';
+        winReasonMessage = 'Won by timeout';
       } else {
-        winReasonMessage = 'Congratulations!';
-      }
-    } else {
-      winnerMessage = 'You Lost';
-      // Determine reason
-      if (gameRoom.winner_reason === 'checkmate') {
-        winReasonMessage = 'Defeated by checkmate';
-      } else if (gameRoom.winner_reason === 'resignation') {
-        winReasonMessage = 'You resigned';
-      } else if (gameRoom.winner_reason === 'opponent_left') {
-        winReasonMessage = 'You left the game';
-      } else if (gameRoom.winner_reason === 'timeout') {
-        winReasonMessage = 'You ran out of time';
-      } else {
-        winReasonMessage = 'Better luck next time';
+        winReasonMessage = 'Game completed';
       }
     }
   }
@@ -481,6 +475,20 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
                 />
               </div>
             )}
+            
+            {/* Player Info */}
+            <div className="rounded-md border p-2 text-sm w-full min-w-37.5">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">You:</span>
+                  <span className="font-medium">{myUsername}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Opponent:</span>
+                  <span className="font-medium">{opponentUsername}</span>
+                </div>
+              </div>
+            </div>
             
             {/* Turn Indicator */}
             {!isGameOver && (
