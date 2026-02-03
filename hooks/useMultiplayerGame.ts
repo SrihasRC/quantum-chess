@@ -251,18 +251,20 @@ export function useMultiplayerGame(roomId: string | null) {
 
       // Update player stats if game is completed
       if (updateData.status === 'completed' && currentGameRoom.creator_username && currentGameRoom.opponent_username) {
+        const finalBoard = updateData.game_state;
+        
         if (updateData.winner === 'draw') {
-          // Both players get a draw
-          await updatePlayerStats(currentGameRoom.creator_username, 'draw');
-          await updatePlayerStats(currentGameRoom.opponent_username, 'draw');
+          // Both players get a draw with piece bonuses
+          await updatePlayerStats(currentGameRoom.creator_username, 'draw', finalBoard, 'white');
+          await updatePlayerStats(currentGameRoom.opponent_username, 'draw', finalBoard, 'black');
         } else if (updateData.winner === 'white') {
           // White wins, black loses
-          await updatePlayerStats(currentGameRoom.creator_username, 'win');
-          await updatePlayerStats(currentGameRoom.opponent_username, 'loss');
+          await updatePlayerStats(currentGameRoom.creator_username, 'win', finalBoard, 'white');
+          await updatePlayerStats(currentGameRoom.opponent_username, 'loss', finalBoard, 'black');
         } else if (updateData.winner === 'black') {
           // Black wins, white loses
-          await updatePlayerStats(currentGameRoom.opponent_username, 'win');
-          await updatePlayerStats(currentGameRoom.creator_username, 'loss');
+          await updatePlayerStats(currentGameRoom.opponent_username, 'win', finalBoard, 'black');
+          await updatePlayerStats(currentGameRoom.creator_username, 'loss', finalBoard, 'white');
         }
       }
 
@@ -294,14 +296,15 @@ export function useMultiplayerGame(roomId: string | null) {
 
       if (error) throw error;
 
-      // Update player stats
+      // Update player stats with current board state
       if (gameRoom.creator_username && gameRoom.opponent_username) {
+        const currentBoard = gameRoom.game_state;
         if (playerColor === 'white') {
-          await updatePlayerStats(gameRoom.creator_username, 'loss');
-          await updatePlayerStats(gameRoom.opponent_username, 'win');
+          await updatePlayerStats(gameRoom.creator_username, 'loss', currentBoard, 'white');
+          await updatePlayerStats(gameRoom.opponent_username, 'win', currentBoard, 'black');
         } else {
-          await updatePlayerStats(gameRoom.opponent_username, 'loss');
-          await updatePlayerStats(gameRoom.creator_username, 'win');
+          await updatePlayerStats(gameRoom.opponent_username, 'loss', currentBoard, 'black');
+          await updatePlayerStats(gameRoom.creator_username, 'win', currentBoard, 'white');
         }
       }
 

@@ -33,8 +33,15 @@ export default function LeaderboardPage() {
       <Header />
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-4xl font-bold">Leaderboard</h1>
+          <div className="flex items-start justify-between mb-6 gap-4">
+            <div>
+              <h1 className="text-4xl font-bold mb-2">Leaderboard</h1>
+              <div className="text-sm text-muted-foreground space-y-1">
+                <p><strong>Base Points:</strong> Win = 3 pts | Draw = 1 pt | Loss = 0 pts</p>
+                <p><strong>Piece Bonus:</strong> All players get up to +2 pts for remaining pieces (16 pieces = +2 pts)</p>
+                <p className="text-xs">Total range: Win (3-5 pts), Draw (1-3 pts), Loss (0-2 pts)</p>
+              </div>
+            </div>
             <Link href="/multiplayer">
               <Button variant="outline">Back to Multiplayer</Button>
             </Link>
@@ -151,7 +158,7 @@ export default function LeaderboardPage() {
                           </td>
                           <td className="text-center py-3 px-4">
                             <span className="text-primary font-bold text-lg">
-                              {player.points}
+                              {player.points.toFixed(2)}
                             </span>
                           </td>
                         </tr>
@@ -163,10 +170,6 @@ export default function LeaderboardPage() {
               );})()}
             </CardContent>
           </Card>
-
-          <div className="mt-6 text-center text-muted-foreground text-sm">
-            <p>Points: Win = 3 pts, Draw = 1 pt, Loss = 0 pts</p>
-          </div>
         </div>
       </main>
     </div>

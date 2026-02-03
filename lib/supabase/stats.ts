@@ -1,9 +1,38 @@
 import { supabase } from './client';
 import type { PlayerStats } from './types';
+import type { BoardState } from '@/lib/types';
+
+/**
+ * Calculate bonus points based on remaining pieces
+ * Maximum 32 pieces (16 per side), normalized to 0-2 bonus points
+ */
+function calculatePieceBonus(board: BoardState, playerColor: 'white' | 'black'): number {
+  if (!board || !board.pieces) return 0;
+  
+  // Count pieces for the player
+  // For quantum pieces, count them if their highest probability location is >= 0.5
+  const playerPieces = board.pieces.filter(p => {
+    if (p.color !== playerColor) return false;
+    
+    // If not in superposition, count it
+    if (!p.isSuperposed) return true;
+    
+    // If in superposition, only count if max probability >= 0.5
+    const maxProbability = Math.max(...Object.values(p.superposition));
+    return maxProbability >= 0.5;
+  }).length;
+  
+  // Normalize: 0 pieces = 0 bonus, 16 pieces = 2 bonus points
+  // This gives diminishing returns (having more pieces left = better performance)
+  const bonus = (playerPieces / 16) * 2;
+  return Math.min(bonus, 2); // Cap at 2 bonus points
+}
 
 export async function updatePlayerStats(
   username: string,
-  result: 'win' | 'loss' | 'draw'
+  result: 'win' | 'loss' | 'draw',
+  board?: BoardState,
+  playerColor?: 'white' | 'black'
 ) {
   try {
     // Get current stats
@@ -13,7 +42,14 @@ export async function updatePlayerStats(
       .eq('username', username)
       .single() as { data: PlayerStats | null; error: unknown };
 
-    const points = result === 'win' ? 3 : result === 'draw' ? 1 : 0;
+    // Base points: win=3, draw=1, loss=0
+    let points = result === 'win' ? 3 : result === 'draw' ? 1 : 0;
+    
+    // Add piece count bonus if board state is provided
+    if (board && playerColor) {
+      const pieceBonus = calculatePieceBonus(board, playerColor);
+      points += pieceBonus;
+    }
 
     if (fetchError || !stats) {
       // Create new stats entry
