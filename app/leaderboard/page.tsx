@@ -7,24 +7,31 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Header } from '@/components/layout/Header';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { RefreshCw } from 'lucide-react';
 
 export default function LeaderboardPage() {
   const [leaders, setLeaders] = useState<PlayerStats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchLeaderboard = async () => {
-      try {
-        const data = await getLeaderboard(50); // Top 50 players
-        setLeaders(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load leaderboard');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchLeaderboard = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    
+    try {
+      const data = await getLeaderboard(50); // Top 50 players
+      setLeaders(data);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load leaderboard');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
+  useEffect(() => {
     fetchLeaderboard();
   }, []);
 
@@ -49,7 +56,18 @@ export default function LeaderboardPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Top Players</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Top Players</CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fetchLeaderboard(true)}
+                  disabled={refreshing || loading}
+                >
+                  <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {loading && (

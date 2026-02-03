@@ -385,6 +385,13 @@ export function useMultiplayerGame(roomId: string | null) {
 
       if (error) throw error;
 
+      // Update player stats with current board state
+      if (gameRoom.creator_username && gameRoom.opponent_username) {
+        const currentBoard = gameRoom.game_state;
+        await updatePlayerStats(gameRoom.creator_username, 'draw', currentBoard, 'white');
+        await updatePlayerStats(gameRoom.opponent_username, 'draw', currentBoard, 'black');
+      }
+
       toast.info('Draw accepted', {
         description: 'Game ended in a draw',
       });
