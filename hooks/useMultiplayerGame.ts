@@ -118,6 +118,7 @@ export function useMultiplayerGame(roomId: string | null) {
       // If both players are ready, set status to active
       if (bothReady) {
         updateData.status = 'active';
+        updateData.last_move_time = Date.now();
       }
 
       const { error } = await supabase
@@ -125,10 +126,16 @@ export function useMultiplayerGame(roomId: string | null) {
         .update(updateData as never)
         .eq('id', gameRoom.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Failed to set player ready:', error);
+        throw error;
+      }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      console.error('Failed to set player ready:', errorMessage);
+      console.error('Failed to set player ready - full error:', err);
+      const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
+      toast.error('Failed to set ready status', {
+        description: errorMessage,
+      });
     }
   }, [gameRoom, playerColor]);
 
@@ -149,6 +156,8 @@ export function useMultiplayerGame(roomId: string | null) {
       const updateData: Partial<GameRoom> = {
         game_state: newBoardState,
         move_history: newMoveHistory,
+        last_move_time: Date.now() as any,
+        draw_offered_by: null, // Clear any pending draw offer when a move is made
       };
 
       // If game ended, update status and winner
@@ -251,6 +260,135 @@ export function useMultiplayerGame(roomId: string | null) {
     }
   }, [gameRoom, playerColor]);
 
+  // Offer draw
+  const offerDraw = useCallback(async () => {
+    if (!gameRoom || !playerColor) return;
+
+    try {
+      const { error } = await supabase
+        .from('game_rooms')
+        .update({
+          draw_offered_by: playerColor,
+        } as never)
+        .eq('id', gameRoom.id);
+
+      if (error) throw error;
+
+      toast.info('Draw offered', {
+        description: 'Waiting for opponent response',
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      toast.error('Failed to offer draw', {
+        description: errorMessage,
+      });
+      throw err;
+    }
+  }, [gameRoom, playerColor]);
+
+  // Accept draw
+  const acceptDraw = useCallback(async () => {
+    if (!gameRoom) return;
+
+    try {
+      const { error } = await supabase
+        .from('game_rooms')
+        .update({
+          status: 'completed',
+          winner: 'draw',
+          winner_reason: 'draw_agreement',
+          draw_offered_by: null,
+        } as never)
+        .eq('id', gameRoom.id);
+
+      if (error) throw error;
+
+      toast.info('Draw accepted', {
+        description: 'Game ended in a draw',
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      toast.error('Failed to accept draw', {
+        description: errorMessage,
+      });
+      throw err;
+    }
+  }, [gameRoom]);
+
+  // Decline draw
+  const declineDraw = useCallback(async () => {
+    if (!gameRoom) return;
+
+    try {
+      const { error } = await supabase
+        .from('game_rooms')
+        .update({
+          draw_offered_by: null,
+        } as never)
+        .eq('id', gameRoom.id);
+
+      if (error) throw error;
+
+      toast.info('Draw declined');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      toast.error('Failed to decline draw', {
+        description: errorMessage,
+      });
+      throw err;
+    }
+  }, [gameRoom]);
+
+  // Update timer (deduct time from current player)
+  const updateTimer = useCallback(async (elapsedSeconds: number) => {
+    if (!gameRoom || gameRoom.status !== 'active') return;
+
+    const currentPlayer = gameRoom.current_player;
+    const timeKey = currentPlayer === 'white' ? 'white_time_remaining' : 'black_time_remaining';
+    const currentTime = gameRoom[timeKey];
+    const newTime = Math.max(0, currentTime - elapsedSeconds);
+
+    // Check if time ran out
+    if (newTime === 0) {
+      const winner = currentPlayer === 'white' ? ('black' as const) : ('white' as const);
+      
+      try {
+        const { error } = await supabase
+          .from('game_rooms')
+          .update({
+            status: 'completed',
+            winner: winner,
+            winner_reason: 'timeout',
+            [timeKey]: 0,
+          } as never)
+          .eq('id', gameRoom.id);
+
+        if (error) {
+          console.error('Failed to end game on timeout:', error);
+        }
+      } catch (err) {
+        console.error('Failed to end game on timeout:', err);
+      }
+      return;
+    }
+
+    // Update database every second for accurate timing
+    try {
+      const { error } = await supabase
+        .from('game_rooms')
+        .update({
+          [timeKey]: newTime,
+        } as never)
+        .eq('id', gameRoom.id);
+
+      if (error) {
+        console.error('Failed to update timer:', error);
+      }
+    } catch (err) {
+      console.error('Failed to update timer:', err);
+    }
+  }, [gameRoom]);
+
   // Subscribe to game updates
   useEffect(() => {
     if (!roomId) {
@@ -332,5 +470,9 @@ export function useMultiplayerGame(roomId: string | null) {
     resignGame,
     endGame,
     setPlayerReady,
+    offerDraw,
+    acceptDraw,
+    declineDraw,
+    updateTimer,
   };
 }

@@ -22,9 +22,13 @@ export interface Database {
           game_state: Json
           move_history: Json
           winner: 'white' | 'black' | 'draw' | null
-          winner_reason: 'checkmate' | 'resignation' | 'opponent_left' | 'draw' | null
+          winner_reason: 'checkmate' | 'resignation' | 'opponent_left' | 'draw' | 'timeout' | 'draw_agreement' | null
           creator_ready: boolean
           opponent_ready: boolean
+          white_time_remaining: number
+          black_time_remaining: number
+          last_move_time: number | null
+          draw_offered_by: 'white' | 'black' | null
         }
         Insert: {
           id?: string
@@ -36,9 +40,13 @@ export interface Database {
           game_state: Json
           move_history?: Json
           winner?: 'white' | 'black' | 'draw' | null
-          winner_reason?: 'checkmate' | 'resignation' | 'opponent_left' | 'draw' | null
+          winner_reason?: 'checkmate' | 'resignation' | 'opponent_left' | 'draw' | 'timeout' | 'draw_agreement' | null
           creator_ready?: boolean
           opponent_ready?: boolean
+          white_time_remaining?: number
+          black_time_remaining?: number
+          last_move_time?: number | null
+          draw_offered_by?: 'white' | 'black' | null
         }
         Update: {
           id?: string
@@ -50,9 +58,13 @@ export interface Database {
           game_state?: Json
           move_history?: Json
           winner?: 'white' | 'black' | 'draw' | null
-          winner_reason?: 'checkmate' | 'resignation' | 'opponent_left' | 'draw' | null
+          winner_reason?: 'checkmate' | 'resignation' | 'opponent_left' | 'draw' | 'timeout' | 'draw_agreement' | null
           creator_ready?: boolean
           opponent_ready?: boolean
+          white_time_remaining?: number
+          black_time_remaining?: number
+          last_move_time?: number | null
+          draw_offered_by?: 'white' | 'black' | null
         }
       }
     }
@@ -69,7 +81,11 @@ export interface GameRoom {
   game_state: BoardState;
   move_history: MoveHistoryEntry[];
   winner: 'white' | 'black' | 'draw' | null;
-  winner_reason?: 'checkmate' | 'resignation' | 'opponent_left' | 'draw' | null;
+  winner_reason?: 'checkmate' | 'resignation' | 'opponent_left' | 'draw' | 'timeout' | 'draw_agreement' | null;
   creator_ready: boolean;
   opponent_ready: boolean;
+  white_time_remaining: number;
+  black_time_remaining: number;
+  last_move_time: number | null;
+  draw_offered_by: 'white' | 'black' | null;
 }
