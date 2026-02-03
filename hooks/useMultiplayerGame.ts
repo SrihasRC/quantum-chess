@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { updatePlayerStats } from '@/lib/supabase/stats';
 import type { GameRoom } from '@/lib/supabase/types';
@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 
 export function useMultiplayerGame(roomId: string | null) {
   const [gameRoom, setGameRoom] = useState<GameRoom | null>(null);
+  const gameRoomRef = useRef<GameRoom | null>(null);
   const [playerId] = useState(() => {
     if (typeof window !== 'undefined') {
       let id = localStorage.getItem('playerId');
@@ -24,6 +25,11 @@ export function useMultiplayerGame(roomId: string | null) {
   const [playerColor, setPlayerColor] = useState<'white' | 'black' | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    gameRoomRef.current = gameRoom;
+  }, [gameRoom]);
 
   // Create a new game room
   const createGame = useCallback(async (username?: string) => {
@@ -151,20 +157,18 @@ export function useMultiplayerGame(roomId: string | null) {
 
   // Make a move
   const makeMove = useCallback(async (move: Move, newBoardState: BoardState, moveEntry: MoveHistoryEntry, gameStatus?: string) => {
-    if (!gameRoom) return;
+    // Use ref to get the latest gameRoom state (avoiding stale closures)
+    const currentGameRoom = gameRoomRef.current;
+    if (!currentGameRoom) return;
 
-    // Check if it's the player's turn
-    if (playerColor !== gameRoom.current_player) {
-      console.error('Move rejected - not your turn:', { playerColor, currentPlayer: gameRoom.current_player });
-      toast.error("Not your turn");
-      return;
-    }
-
+    // Don't check turn here - it's already validated in the page before movePiece is called
+    // Checking here causes race conditions with real-time updates
     console.log('Making move:', { from: move.from, to: move.to, playerColor });
 
     try {
-      const newMoveHistory = [...gameRoom.move_history, moveEntry];
-      const nextPlayer = gameRoom.current_player === 'white' ? ('black' as const) : ('white' as const);
+      const newMoveHistory = [...currentGameRoom.move_history, moveEntry];
+      // Determine next player based on who made the move, not current_player (which might be stale)
+      const nextPlayer = playerColor === 'white' ? ('black' as const) : ('white' as const);
 
       const updateData: Partial<GameRoom> = {
         game_state: newBoardState,
@@ -207,29 +211,35 @@ export function useMultiplayerGame(roomId: string | null) {
       const { error } = await supabase
         .from('game_rooms')
         .update(updateData as never)
-        .eq('id', gameRoom.id);
+        .eq('id', currentGameRoom.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Database update error:', error);
+        throw error;
+      }
+
+      console.log('Move synced to database successfully, next player:', nextPlayer);
 
       // Update player stats if game is completed
-      if (updateData.status === 'completed' && gameRoom.creator_username && gameRoom.opponent_username) {
+      if (updateData.status === 'completed' && currentGameRoom.creator_username && currentGameRoom.opponent_username) {
         if (updateData.winner === 'draw') {
           // Both players get a draw
-          await updatePlayerStats(gameRoom.creator_username, 'draw');
-          await updatePlayerStats(gameRoom.opponent_username, 'draw');
+          await updatePlayerStats(currentGameRoom.creator_username, 'draw');
+          await updatePlayerStats(currentGameRoom.opponent_username, 'draw');
         } else if (updateData.winner === 'white') {
           // White wins, black loses
-          await updatePlayerStats(gameRoom.creator_username, 'win');
-          await updatePlayerStats(gameRoom.opponent_username, 'loss');
+          await updatePlayerStats(currentGameRoom.creator_username, 'win');
+          await updatePlayerStats(currentGameRoom.opponent_username, 'loss');
         } else if (updateData.winner === 'black') {
           // Black wins, white loses
-          await updatePlayerStats(gameRoom.opponent_username, 'win');
-          await updatePlayerStats(gameRoom.creator_username, 'loss');
+          await updatePlayerStats(currentGameRoom.opponent_username, 'win');
+          await updatePlayerStats(currentGameRoom.creator_username, 'loss');
         }
       }
 
       // Don't show toast here - let the game room page handle the dialog
     } catch (err) {
+      console.error('makeMove error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       toast.error('Failed to make move', {
         description: errorMessage,

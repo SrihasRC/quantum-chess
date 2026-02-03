@@ -52,7 +52,9 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
   const [showGameOverDialog, setShowGameOverDialog] = useState(false);
   const [lastMoveCount, setLastMoveCount] = useState(0);
   const [hasSetReady, setHasSetReady] = useState(false);
+  const [waitingForTurnSwitch, setWaitingForTurnSwitch] = useState(false);
   const gameRoomRef = useRef(gameRoom);
+  const lastTurnRef = useRef<'white' | 'black' | null>(null);
   const setShouldBlockNavigation = useNavigationGuardStore((state) => state.setShouldBlockNavigation);
   const setOnNavigationAttempt = useNavigationGuardStore((state) => state.setOnNavigationAttempt);
   
@@ -60,6 +62,19 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
   useEffect(() => {
     gameRoomRef.current = gameRoom;
   }, [gameRoom]);
+
+  // Monitor turn changes and unlock moves when turn switches
+  useEffect(() => {
+    if (!gameRoom) return;
+    
+    // If we were waiting for a turn switch and it happened, unlock moves
+    if (waitingForTurnSwitch && lastTurnRef.current !== null && gameRoom.current_player !== lastTurnRef.current) {
+      console.log('Turn switched from', lastTurnRef.current, 'to', gameRoom.current_player);
+      setWaitingForTurnSwitch(false);
+    }
+    
+    lastTurnRef.current = gameRoom.current_player;
+  }, [gameRoom?.current_player, waitingForTurnSwitch]);
 
   // Set player as ready when they enter the room (only once)
   useEffect(() => {
@@ -195,6 +210,12 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
           return;
         }
         
+        // Block moves if we're waiting for turn to switch from previous move
+        if (waitingForTurnSwitch) {
+          console.log('Blocked move - waiting for turn switch');
+          return;
+        }
+        
         // Double-check turn before making move
         if (gameRoom.current_player !== playerColor) {
           toast.error("Not your turn!");
@@ -203,6 +224,10 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
 
         // Execute move locally first
         originalMovePiece(move);
+
+        // Lock moves until subscription confirms turn switch
+        setWaitingForTurnSwitch(true);
+        console.log('Move executed, locking further moves until turn switches');
 
         // Small delay to ensure state is fully updated
         setTimeout(async () => {
@@ -216,11 +241,12 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
             // Check if game ended (white-wins, black-wins, draw)
             const isGameOver = gameStatus === 'white-wins' || gameStatus === 'black-wins' || gameStatus === 'draw';
 
+            const nextPlayer = playerColor === 'white' ? 'black' : 'white';
             console.log('Syncing move to server:', { 
               from: move.from, 
               to: move.to, 
               player: playerColor,
-              nextPlayer: gameRoom.current_player === 'white' ? 'black' : 'white'
+              nextPlayer: nextPlayer
             });
 
             // Sync to server with game status
@@ -229,6 +255,8 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
           } catch (error) {
             console.error('Failed to sync move:', error);
             toast.error('Move failed to sync. Please try again.');
+            // Unlock moves on error
+            setWaitingForTurnSwitch(false);
           }
         }, 100);
       },
@@ -241,7 +269,7 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
         movePiece: originalMovePiece 
       });
     };
-  }, [gameRoom, playerColor, makeMove]);
+  }, [gameRoom, playerColor, makeMove, waitingForTurnSwitch]);
 
   const handleLeave = () => {
     setShowLeaveDialog(true);
