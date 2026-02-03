@@ -36,7 +36,7 @@ export function Piece({
         isDragging && 'cursor-grabbing opacity-50',
         className
       )}
-      style={{ opacity: probability }}
+      style={{ opacity: Math.max(probability, 0.4) }}
     >
       <Image
         src={imagePath}
