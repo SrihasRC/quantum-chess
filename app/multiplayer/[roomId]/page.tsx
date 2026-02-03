@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import { GameContainer } from '@/components/layout/GameContainer';
 import { Chessboard } from '@/components/board/Chessboard';
 import { MoveModSelector, type MoveMode } from '@/components/game/MoveModSelector';
+import { Timer } from '@/components/game/Timer';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Users, Clock, Flag } from 'lucide-react';
+import { ArrowLeft, Users, Clock, Flag, Handshake } from 'lucide-react';
 import { useMultiplayerGame } from '@/hooks/useMultiplayerGame';
 import {
   AlertDialog,
@@ -27,12 +28,27 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
   const resolvedParams = use(params);
   const roomId = resolvedParams.roomId;
   const router = useRouter();
-  const { gameRoom, playerColor, loading, error, makeMove, resignGame, endGame, setPlayerReady } = useMultiplayerGame(roomId);
+  const { 
+    gameRoom, 
+    playerColor, 
+    loading, 
+    error, 
+    makeMove, 
+    resignGame, 
+    endGame, 
+    setPlayerReady,
+    offerDraw,
+    acceptDraw,
+    declineDraw,
+    updateTimer,
+  } = useMultiplayerGame(roomId);
   const resetSelection = useGameStore((state) => state.resetSelection);
   const moveHistory = useGameStore((state) => state.moveHistory);
   const [moveMode, setMoveMode] = useState<MoveMode>('classic');
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [showResignDialog, setShowResignDialog] = useState(false);
+  const [showDrawOfferDialog, setShowDrawOfferDialog] = useState(false);
+  const [showDrawReceivedDialog, setShowDrawReceivedDialog] = useState(false);
   const [showGameOverDialog, setShowGameOverDialog] = useState(false);
   const [lastMoveCount, setLastMoveCount] = useState(0);
   const [hasSetReady, setHasSetReady] = useState(false);
@@ -95,22 +111,6 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
   // const movePiece = useGameStore((state) => state.movePiece);
   // const resetSelection = useGameStore((state) => state.resetSelection);
 
-  // Save/restore game state to isolate multiplayer from local mode
-  useEffect(() => {
-    // Save current game state when entering multiplayer
-    const savedState = {
-      board: useGameStore.getState().board,
-      moveHistory: useGameStore.getState().moveHistory,
-      currentMoveIndex: useGameStore.getState().currentMoveIndex,
-      status: useGameStore.getState().status,
-    };
-
-    return () => {
-      // Restore saved state when leaving multiplayer
-      useGameStore.setState(savedState);
-    };
-  }, []);
-
   // Sync game state from multiplayer to local store
   useEffect(() => {
     if (gameRoom && gameRoom.game_state) {
@@ -118,17 +118,11 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
         board: gameRoom.game_state,
         moveHistory: gameRoom.move_history || [],
         currentMoveIndex: (gameRoom.move_history?.length || 0) - 1,
-        // Disable move navigation in multiplayer - we don't have intermediate board states
         boardStateHistory: [],
       };
       
-      // Don't override the status if it's already a terminal state (white-wins, black-wins, draw)
-      // This preserves the board state after the game ends
-      const currentStatus = useGameStore.getState().status;
-      const isTerminalState = currentStatus === 'white-wins' || currentStatus === 'black-wins' || currentStatus === 'draw';
-      
-      if (gameRoom.status === 'completed' && !isTerminalState) {
-        // Game just ended, always show dialog for both win and loss
+      // Update status based on game state
+      if (gameRoom.status === 'completed') {
         if (gameRoom.winner === 'draw') {
           updateData.status = 'draw';
         } else if (gameRoom.winner === 'white') {
@@ -136,16 +130,20 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
         } else if (gameRoom.winner === 'black') {
           updateData.status = 'black-wins';
         }
-        setShowGameOverDialog(true);
-      } else if (gameRoom.status === 'active' && !isTerminalState) {
-        // Only set to active if not in terminal state
+        
+        // Show dialog on first transition to completed
+        const currentStatus = useGameStore.getState().status;
+        if (currentStatus === 'active' || currentStatus === 'check') {
+          setShowGameOverDialog(true);
+        }
+      } else {
         updateData.status = 'active';
       }
-      // If already in terminal state, don't update status - keep the board as-is
       
       useGameStore.setState(updateData);
     }
-  }, [gameRoom, playerColor]);
+  }, [gameRoom]);
+
 
   // Intercept piece selection and moves to enforce turn-based play
   useEffect(() => {
@@ -245,6 +243,54 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
     setShowResignDialog(false);
   };
 
+  const handleOfferDraw = () => {
+    setShowDrawOfferDialog(true);
+  };
+
+  const confirmOfferDraw = async () => {
+    await offerDraw();
+    setShowDrawOfferDialog(false);
+  };
+
+  const handleAcceptDraw = async () => {
+    await acceptDraw();
+    setShowDrawReceivedDialog(false);
+  };
+
+  const handleDeclineDraw = async () => {
+    await declineDraw();
+    setShowDrawReceivedDialog(false);
+  };
+
+  // Show draw offer dialog when opponent offers draw
+  useEffect(() => {
+    if (gameRoom?.draw_offered_by && gameRoom.draw_offered_by !== playerColor) {
+      setShowDrawReceivedDialog(true);
+    } else {
+      setShowDrawReceivedDialog(false);
+    }
+  }, [gameRoom?.draw_offered_by, playerColor]);
+
+  // Notify player when their draw offer is declined
+  useEffect(() => {
+    const prevDrawOfferedBy = gameRoomRef.current?.draw_offered_by;
+    const currentDrawOfferedBy = gameRoom?.draw_offered_by;
+    
+    // If draw_offered_by changed from player's color to null, it was declined
+    if (prevDrawOfferedBy === playerColor && currentDrawOfferedBy === null && gameRoom?.status === 'active') {
+      toast.error('Draw Declined', {
+        description: 'Your opponent declined the draw offer',
+      });
+    }
+  }, [gameRoom?.draw_offered_by, gameRoom?.status, playerColor]);
+
+  // Handle timer updates
+  const handleTimerUpdate = (elapsedSeconds: number) => {
+    if (gameRoom?.current_player === playerColor && !isGameOver && gameRoom.status === 'active') {
+      updateTimer(elapsedSeconds);
+    }
+  };
+
   // Cleanup on unmount - end game if still active
   useEffect(() => {
     return () => {
@@ -318,36 +364,38 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
   const isGameOver = gameRoom.status === 'completed';
   const isMyTurn = gameRoom.current_player === playerColor;
 
+  // Get player usernames
+  const whiteUsername = gameRoom.creator_username || 'White';
+  const blackUsername = gameRoom.opponent_username || 'Black';
+  const myUsername = playerColor === 'white' ? whiteUsername : blackUsername;
+  const opponentUsername = playerColor === 'white' ? blackUsername : whiteUsername;
+
   // Determine winner message
   let winnerMessage = '';
   let winReasonMessage = '';
   if (isGameOver) {
     if (gameRoom.winner === 'draw') {
       winnerMessage = 'Game Draw';
-      winReasonMessage = 'The game ended in a draw';
-    } else if (gameRoom.winner === playerColor) {
-      winnerMessage = 'You Won!';
-      // Determine reason
-      if (gameRoom.winner_reason === 'checkmate') {
-        winReasonMessage = 'Victory by checkmate!';
-      } else if (gameRoom.winner_reason === 'resignation') {
-        winReasonMessage = 'Opponent resigned';
-      } else if (gameRoom.winner_reason === 'opponent_left') {
-        winReasonMessage = 'Opponent left the game';
+      if (gameRoom.winner_reason === 'draw_agreement') {
+        winReasonMessage = 'Draw agreed by both players';
       } else {
-        winReasonMessage = 'Congratulations!';
+        winReasonMessage = 'The game ended in a draw';
       }
     } else {
-      winnerMessage = 'You Lost';
+      const winnerUsername = gameRoom.winner === 'white' ? whiteUsername : blackUsername;
+      winnerMessage = `${winnerUsername} Won!`;
+      
       // Determine reason
       if (gameRoom.winner_reason === 'checkmate') {
-        winReasonMessage = 'Defeated by checkmate';
+        winReasonMessage = 'Victory by checkmate';
       } else if (gameRoom.winner_reason === 'resignation') {
-        winReasonMessage = 'You resigned';
+        winReasonMessage = 'Won by resignation';
       } else if (gameRoom.winner_reason === 'opponent_left') {
-        winReasonMessage = 'You left the game';
+        winReasonMessage = 'Opponent left the game';
+      } else if (gameRoom.winner_reason === 'timeout') {
+        winReasonMessage = 'Won by timeout';
       } else {
-        winReasonMessage = 'Better luck next time';
+        winReasonMessage = 'Game completed';
       }
     }
   }
@@ -358,21 +406,33 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
       gameControls={
         <>
           {!isWaiting && !isGameOver && (
-            <Button 
-              onClick={handleResign} 
-              variant="destructive" 
-              size="sm"
-              className="w-full"
-            >
-              <Flag className="mr-2 h-4 w-4" />
-              Resign
-            </Button>
+            <>
+              <Button 
+                onClick={handleOfferDraw} 
+                variant="outline" 
+                size="sm"
+                className="w-full"
+                disabled={!!gameRoom.draw_offered_by}
+              >
+                <Handshake className="mr-2 h-4 w-4" />
+                {gameRoom.draw_offered_by === playerColor ? 'Draw Offered' : 'Offer Draw'}
+              </Button>
+              <Button 
+                onClick={handleResign} 
+                variant="destructive" 
+                size="sm"
+                className="w-full"
+              >
+                <Flag className="mr-2 h-4 w-4" />
+                Resign
+              </Button>
+            </>
           )}
           <Button 
             onClick={handleLeave} 
             variant="outline" 
             size="sm"
-            className={!isWaiting && !isGameOver ? "w-full" : "w-full col-span-2"}
+            className={!isWaiting && !isGameOver ? "w-full col-span-2" : "w-full col-span-2"}
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
             {isGameOver ? 'Back to Lobby' : 'Leave Game'}
@@ -397,6 +457,38 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
         <div className="flex w-full flex-col items-center gap-3 sm:gap-4 md:flex-row md:gap-6 lg:gap-8">
           <div className="flex flex-col gap-2 shrink-0 md:w-auto">
             <MoveModSelector mode={moveMode} onModeChange={setMoveMode} />
+            
+            {/* Timers */}
+            {!isGameOver && (
+              <div className="flex flex-col gap-2">
+                <Timer
+                  timeRemaining={gameRoom.black_time_remaining}
+                  isActive={gameRoom.current_player === 'black'}
+                  color="black"
+                  onTimeUpdate={handleTimerUpdate}
+                />
+                <Timer
+                  timeRemaining={gameRoom.white_time_remaining}
+                  isActive={gameRoom.current_player === 'white'}
+                  color="white"
+                  onTimeUpdate={handleTimerUpdate}
+                />
+              </div>
+            )}
+            
+            {/* Player Info */}
+            <div className="rounded-md border p-2 text-sm w-full min-w-37.5">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">You:</span>
+                  <span className="font-medium">{myUsername}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Opponent:</span>
+                  <span className="font-medium">{opponentUsername}</span>
+                </div>
+              </div>
+            </div>
             
             {/* Turn Indicator */}
             {!isGameOver && (
@@ -474,6 +566,42 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmResign} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Resign
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Offer Draw Confirmation */}
+      <AlertDialog open={showDrawOfferDialog} onOpenChange={setShowDrawOfferDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Offer Draw?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Do you want to offer a draw to your opponent?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmOfferDraw}>
+              Offer Draw
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Draw Received Dialog */}
+      <AlertDialog open={showDrawReceivedDialog} onOpenChange={setShowDrawReceivedDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Draw Offered</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your opponent has offered a draw. Do you accept?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleDeclineDraw}>Decline</AlertDialogCancel>
+            <AlertDialogAction onClick={handleAcceptDraw}>
+              Accept Draw
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

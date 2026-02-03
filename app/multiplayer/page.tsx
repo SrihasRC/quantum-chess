@@ -1,28 +1,51 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, LogIn, Copy, Check } from 'lucide-react';
+import { Plus, LogIn, Copy, Check, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Header } from '@/components/layout/Header';
 import { useMultiplayerGame } from '@/hooks/useMultiplayerGame';
+import { useUsername } from '@/hooks/useUsername';
+import { UsernameDialog } from '@/components/modals/UsernameDialog';
 import { toast } from 'sonner';
+import Link from 'next/link';
 
 export default function MultiplayerLobby() {
   const router = useRouter();
   const { createGame, joinGame } = useMultiplayerGame(null);
+  const { username, setUsername: saveUsername, hasUsername, isLoading } = useUsername();
   const [gameCode, setGameCode] = useState('');
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
   const [createdGameId, setCreatedGameId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showUsernameDialog, setShowUsernameDialog] = useState(false);
+
+  // Show username dialog on mount if no username
+  useEffect(() => {
+    if (!isLoading && !hasUsername) {
+      setShowUsernameDialog(true);
+    }
+  }, [hasUsername, isLoading]);
+
+  const handleUsernameSubmit = (newUsername: string) => {
+    saveUsername(newUsername);
+    setShowUsernameDialog(false);
+    toast.success(`Welcome, ${newUsername}!`);
+  };
 
   const handleCreateGame = async () => {
+    if (!hasUsername) {
+      setShowUsernameDialog(true);
+      return;
+    }
+
     setCreating(true);
     try {
-      const gameId = await createGame();
+      const gameId = await createGame(username || undefined);
       setCreatedGameId(gameId);
     } catch (error) {
       // Error handled in hook
@@ -32,6 +55,11 @@ export default function MultiplayerLobby() {
   };
 
   const handleJoinGame = async () => {
+    if (!hasUsername) {
+      setShowUsernameDialog(true);
+      return;
+    }
+
     if (!gameCode.trim()) {
       toast.error('Please enter a game code');
       return;
@@ -39,7 +67,7 @@ export default function MultiplayerLobby() {
 
     setJoining(true);
     try {
-      await joinGame(gameCode.trim());
+      await joinGame(gameCode.trim(), username || undefined);
       router.push(`/multiplayer/${gameCode.trim()}`);
     } catch (error) {
       // Error handled in hook
@@ -67,6 +95,8 @@ export default function MultiplayerLobby() {
     <div className="flex h-screen flex-col overflow-hidden">
       <Header />
 
+      <UsernameDialog open={showUsernameDialog} onSubmit={handleUsernameSubmit} />
+
       {/* Main Content */}
       <main className="container mx-auto flex flex-1 items-center justify-center px-3 py-4 sm:px-4 sm:py-6">
         <div className="w-full max-w-xl">
@@ -78,6 +108,21 @@ export default function MultiplayerLobby() {
             <p className="text-sm text-muted-foreground">
               Create a new game or join an existing one
             </p>
+            {username && (
+              <p className="mt-2 text-sm text-primary">
+                Playing as: <span className="font-bold">{username}</span>
+              </p>
+            )}
+          </div>
+
+          {/* Leaderboard Link */}
+          <div className="mb-4">
+            <Link href="/leaderboard">
+              <Button variant="outline" className="w-full" size="sm">
+                <Trophy className="mr-2 h-4 w-4" />
+                View Leaderboard
+              </Button>
+            </Link>
           </div>
 
           {/* Action Cards */}

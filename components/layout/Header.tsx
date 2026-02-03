@@ -46,6 +46,8 @@ export function Header() {
     { href: '/', label: 'Home' },
     { href: '/local', label: 'Play' },
     { href: '/sandbox', label: 'Sandbox' },
+    { href: '/multiplayer', label: 'Multiplayer' },
+    { href: '/leaderboard', label: 'Leaderboard' },
     { href: '/rules', label: 'Rules' },
   ];
 
