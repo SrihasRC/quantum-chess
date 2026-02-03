@@ -125,6 +125,16 @@ export default function MultiplayerLobby() {
             </Link>
           </div>
 
+          {/* Tournament Link */}
+          <div className="mb-4">
+            <Link href="/tournament">
+              <Button variant="default" className="w-full" size="sm">
+                <Trophy className="mr-2 h-4 w-4" />
+                Join Tournament
+              </Button>
+            </Link>
+          </div>
+
           {/* Action Cards */}
           <div className="grid gap-3 sm:gap-4">
             {/* Create Game */}

@@ -416,6 +416,9 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
   const renderSquares = () => {
     const squares = [];
     
+    // Check if this is a legacy 2D array board (multiplayer)
+    const isLegacyBoard = Array.isArray(board) && board.length === 8;
+    
     // Render from rank 7 (8th rank) down to rank 0 (1st rank)
     // If flipped, render from rank 0 to 7
     const rankStart = flipped ? 0 : 7;
@@ -432,19 +435,33 @@ export function Chessboard({ mode, flipped = false }: ChessboardProps) {
         const index = rank * 8 + file;
         const isLight = (rank + file) % 2 === 1;
         
-        // Get piece at this square - for superposed pieces, getPieceAt might return null
-        // So we also check all pieces for any probability at this square
-        let piece = getPieceAt(board, index);
+        let piece = null;
         let probability = 1.0;
         
-        // If no certain piece, check for superposed pieces
-        if (!piece) {
-          for (const p of board.pieces) {
-            const prob = p.superposition[index];
-            if (prob && prob > 0) {
-              piece = p;
-              probability = prob;
-              break; // Take first superposed piece at this location
+        // Handle legacy 2D board (multiplayer games)
+        if (isLegacyBoard) {
+          const symbol = (board as any)[rank][file];
+          if (symbol && symbol !== '') {
+            // Convert symbol to piece object
+            const color = symbol === symbol.toLowerCase() ? 'black' : 'white';
+            const type = symbol.toLowerCase() as 'p' | 'n' | 'b' | 'r' | 'q' | 'k';
+            piece = { type, color, symbol: type.toUpperCase() };
+          }
+        } else {
+          // Handle quantum board
+          // Get piece at this square - for superposed pieces, getPieceAt might return null
+          // So we also check all pieces for any probability at this square
+          piece = getPieceAt(board, index);
+          
+          // If no certain piece, check for superposed pieces
+          if (!piece && board.pieces) {
+            for (const p of board.pieces) {
+              const prob = p.superposition[index];
+              if (prob && prob > 0) {
+                piece = p;
+                probability = prob;
+                break; // Take first superposed piece at this location
+              }
             }
           }
         }

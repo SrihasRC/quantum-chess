@@ -31,6 +31,8 @@ export interface Database {
           draw_offered_by: 'white' | 'black' | null
           creator_username: string | null
           opponent_username: string | null
+          is_tournament: boolean
+          tournament_round: number | null
         }
         Insert: {
           id?: string
@@ -83,6 +85,7 @@ export interface Database {
           games_played: number
           created_at: string
           updated_at: string
+          is_tournament_player: boolean
         }
         Insert: {
           username: string
@@ -128,6 +131,8 @@ export interface GameRoom {
   draw_offered_by: 'white' | 'black' | null;
   creator_username: string | null;
   opponent_username: string | null;
+  is_tournament: boolean;
+  tournament_round: number | null;
 }
 
 export interface PlayerStats {
@@ -139,4 +144,8 @@ export interface PlayerStats {
   games_played: number;
   created_at: string;
   updated_at: string;
+  is_tournament_player: boolean;
+}
+  updated_at: string;
+  is_tournament_player: boolean;
 }

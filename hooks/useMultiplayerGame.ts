@@ -118,10 +118,17 @@ export function useMultiplayerGame(roomId: string | null) {
         ? gameRoom.opponent_ready 
         : gameRoom.creator_ready;
 
-      // If both players are ready, set status to active
+      // If both players are ready, set status to active and start timer
       if (bothReady) {
         updateData.status = 'active';
         updateData.last_move_time = Date.now();
+        // Initialize timer for both players if not set
+        if (!gameRoom.white_time_remaining) {
+          updateData.white_time_remaining = 300;
+        }
+        if (!gameRoom.black_time_remaining) {
+          updateData.black_time_remaining = 300;
+        }
       }
 
       const { error } = await supabase
@@ -148,9 +155,12 @@ export function useMultiplayerGame(roomId: string | null) {
 
     // Check if it's the player's turn
     if (playerColor !== gameRoom.current_player) {
+      console.error('Move rejected - not your turn:', { playerColor, currentPlayer: gameRoom.current_player });
       toast.error("Not your turn");
       return;
     }
+
+    console.log('Making move:', { from: move.from, to: move.to, playerColor });
 
     try {
       const newMoveHistory = [...gameRoom.move_history, moveEntry];

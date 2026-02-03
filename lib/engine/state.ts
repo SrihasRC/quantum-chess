@@ -101,6 +101,16 @@ export function createSuperposedPiece(
 
 /** Get piece at square (if probability = 1.0) */
 export function getPieceAt(board: BoardState, square: SquareIndex): QuantumPiece | null {
+  // Handle legacy 2D array board (multiplayer games)
+  if (Array.isArray(board) && board.length === 8) {
+    return null; // Legacy board doesn't have quantum pieces
+  }
+  
+  // Handle quantum board with pieces array
+  if (!board.pieces || !Array.isArray(board.pieces)) {
+    return null;
+  }
+  
   for (const piece of board.pieces) {
     const prob = piece.superposition[square];
     if (prob === 1.0) {
@@ -114,6 +124,16 @@ export function getPieceAt(board: BoardState, square: SquareIndex): QuantumPiece
  * Get all pieces that have some probability of being at a square
  */
 export function getPiecesAtSquare(board: BoardState, square: SquareIndex): QuantumPiece[] {
+  // Handle legacy 2D array board (multiplayer games)
+  if (Array.isArray(board) && board.length === 8) {
+    return []; // Legacy board doesn't have quantum pieces
+  }
+  
+  // Handle quantum board with pieces array
+  if (!board.pieces || !Array.isArray(board.pieces)) {
+    return [];
+  }
+  
   return board.pieces.filter(piece => piece.superposition[square] !== undefined);
 }
 

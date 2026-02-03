@@ -13,12 +13,38 @@ export function PlayerInfo({ gameControls }: PlayerInfoProps) {
   const activeColor = useGameStore((state) => state.board.activeColor);
   const status = useGameStore((state) => state.status);
   const board = useGameStore((state) => state.board);
-  const fullmoveNumber = Math.floor(board.fullmoveNumber);
+  const moveHistory = useGameStore((state) => state.moveHistory);
   
-  // Count pieces
-  const whitePieces = board.pieces.filter((p) => p.color === 'white').length;
-  const blackPieces = board.pieces.filter((p) => p.color === 'black').length;
-  const quantumPieces = board.pieces.filter((p) => p.isSuperposed).length;
+  // Get fullmove number - use moveHistory length if board.fullmoveNumber doesn't exist
+  const fullmoveNumber = board.fullmoveNumber 
+    ? Math.floor(board.fullmoveNumber) 
+    : Math.floor(moveHistory.length / 2) + 1;
+  
+  // Count pieces - handle both piece array and board grid
+  let whitePieces = 0;
+  let blackPieces = 0;
+  let quantumPieces = 0;
+
+  if (Array.isArray(board.pieces)) {
+    // New board structure with pieces array
+    whitePieces = board.pieces.filter((p) => p.color === 'white').length;
+    blackPieces = board.pieces.filter((p) => p.color === 'black').length;
+    quantumPieces = board.pieces.filter((p) => p.isSuperposed).length;
+  } else if (Array.isArray(board) && board.length === 8) {
+    // Legacy board structure (2D array)
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const piece = board[row][col];
+        if (piece) {
+          if (piece === piece.toUpperCase()) {
+            whitePieces++;
+          } else {
+            blackPieces++;
+          }
+        }
+      }
+    }
+  }
 
   return (
     <Card className="p-2 sm:p-3">

@@ -2,22 +2,30 @@
 
 import { useEffect, useState } from 'react';
 import { getLeaderboard } from '@/lib/supabase/stats';
+import { getTournamentLeaderboard } from '@/lib/supabase/tournament';
 import type { PlayerStats } from '@/lib/supabase/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Header } from '@/components/layout/Header';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { Trophy } from 'lucide-react';
 
 export default function LeaderboardPage() {
   const [leaders, setLeaders] = useState<PlayerStats[]>([]);
+  const [tournamentLeaders, setTournamentLeaders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showTournamentOnly, setShowTournamentOnly] = useState(false);
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
       try {
-        const data = await getLeaderboard(50); // Top 50 players
-        setLeaders(data);
+        const [allPlayers, tournamentStats] = await Promise.all([
+          getLeaderboard(50), // Top 50 players
+          getTournamentLeaderboard()
+        ]);
+        setLeaders(allPlayers);
+        setTournamentLeaders(tournamentStats);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load leaderboard');
       } finally {
@@ -27,6 +35,8 @@ export default function LeaderboardPage() {
 
     fetchLeaderboard();
   }, []);
+
+  const displayLeaders = showTournamentOnly ? tournamentLeaders : leaders;
 
   return (
     <div className="min-h-screen">
@@ -42,7 +52,17 @@ export default function LeaderboardPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Top Players</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Top Players</CardTitle>
+                <Button
+                  variant={showTournamentOnly ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setShowTournamentOnly(!showTournamentOnly)}
+                >
+                  <Trophy className="mr-2 h-4 w-4" />
+                  {showTournamentOnly ? 'All Players' : 'Tournament Only'}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {loading && (
@@ -57,20 +77,20 @@ export default function LeaderboardPage() {
                 </div>
               )}
 
-              {!loading && !error && leaders.length === 0 && (
+              {!loading && !error && displayLeaders.length === 0 && (
                 <div className="text-center text-muted-foreground py-8">
-                  No players yet. Be the first to play!
+                  {showTournamentOnly ? 'No tournament participants yet.' : 'No players yet. Be the first to play!'}
                 </div>
               )}
 
-              {!loading && !error && leaders.length > 0 && (() => {
+              {!loading && !error && displayLeaders.length > 0 && (() => {
                 // Calculate ranks with proper tie handling
-                const rankedLeaders = leaders.map((player, index) => {
+                const rankedLeaders = displayLeaders.map((player, index) => {
                   let rank = 1;
                   
                   // Count how many players are ahead
                   for (let i = 0; i < index; i++) {
-                    const prev = leaders[i];
+                    const prev = displayLeaders[i];
                     const prevWinRate = prev.games_played > 0 ? prev.wins / prev.games_played : 0;
                     const currWinRate = player.games_played > 0 ? player.wins / player.games_played : 0;
                     
