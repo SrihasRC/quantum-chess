@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { GameContainer } from '@/components/layout/GameContainer';
 import { Chessboard } from '@/components/board/Chessboard';
 import { MoveModSelector, type MoveMode } from '@/components/game/MoveModSelector';
-import { Timer } from '@/components/game/Timer';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Users, Clock, Flag, Handshake } from 'lucide-react';
 import { useMultiplayerGame } from '@/hooks/useMultiplayerGame';
@@ -40,7 +39,6 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
     offerDraw,
     acceptDraw,
     declineDraw,
-    updateTimer,
   } = useMultiplayerGame(roomId);
   const resetSelection = useGameStore((state) => state.resetSelection);
   const moveHistory = useGameStore((state) => state.moveHistory);
@@ -332,13 +330,6 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
     }
   }, [gameRoom?.draw_offered_by, gameRoom?.status, playerColor]);
 
-  // Handle timer updates
-  const handleTimerUpdate = (elapsedSeconds: number) => {
-    if (gameRoom?.current_player === playerColor && !isGameOver && gameRoom.status === 'active') {
-      updateTimer(elapsedSeconds);
-    }
-  };
-
   // Cleanup on unmount - end game if still active
   useEffect(() => {
     return () => {
@@ -505,24 +496,6 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
         <div className="flex w-full flex-col items-center gap-3 sm:gap-4 md:flex-row md:gap-6 lg:gap-8">
           <div className="flex flex-col gap-2 shrink-0 md:w-auto">
             <MoveModSelector mode={moveMode} onModeChange={setMoveMode} />
-            
-            {/* Timers */}
-            {!isGameOver && (
-              <div className="flex flex-col gap-2">
-                <Timer
-                  timeRemaining={gameRoom.black_time_remaining}
-                  isActive={gameRoom.status === 'active' && gameRoom.current_player === 'black'}
-                  color="black"
-                  onTimeUpdate={handleTimerUpdate}
-                />
-                <Timer
-                  timeRemaining={gameRoom.white_time_remaining}
-                  isActive={gameRoom.status === 'active' && gameRoom.current_player === 'white'}
-                  color="white"
-                  onTimeUpdate={handleTimerUpdate}
-                />
-              </div>
-            )}
             
             {/* Player Info */}
             <div className="rounded-md border p-2 text-sm w-full min-w-37.5">

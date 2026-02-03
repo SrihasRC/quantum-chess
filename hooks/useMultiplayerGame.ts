@@ -390,67 +390,6 @@ export function useMultiplayerGame(roomId: string | null) {
     }
   }, [gameRoom]);
 
-  // Update timer (deduct time from current player)
-  const updateTimer = useCallback(async (elapsedSeconds: number) => {
-    if (!gameRoom || gameRoom.status !== 'active') return;
-
-    const currentPlayer = gameRoom.current_player;
-    const timeKey = currentPlayer === 'white' ? 'white_time_remaining' : 'black_time_remaining';
-    const currentTime = gameRoom[timeKey];
-    const newTime = Math.max(0, currentTime - elapsedSeconds);
-
-    // Check if time ran out
-    if (newTime === 0) {
-      const winner = currentPlayer === 'white' ? ('black' as const) : ('white' as const);
-      
-      try {
-        const { error } = await supabase
-          .from('game_rooms')
-          .update({
-            status: 'completed',
-            winner: winner,
-            winner_reason: 'timeout',
-            [timeKey]: 0,
-          } as never)
-          .eq('id', gameRoom.id);
-
-        if (error) {
-          console.error('Failed to end game on timeout:', error);
-        }
-
-        // Update player stats on timeout
-        if (gameRoom.creator_username && gameRoom.opponent_username) {
-          if (winner === 'white') {
-            await updatePlayerStats(gameRoom.creator_username, 'win');
-            await updatePlayerStats(gameRoom.opponent_username, 'loss');
-          } else {
-            await updatePlayerStats(gameRoom.opponent_username, 'win');
-            await updatePlayerStats(gameRoom.creator_username, 'loss');
-          }
-        }
-      } catch (err) {
-        console.error('Failed to end game on timeout:', err);
-      }
-      return;
-    }
-
-    // Update database every second for accurate timing
-    try {
-      const { error } = await supabase
-        .from('game_rooms')
-        .update({
-          [timeKey]: newTime,
-        } as never)
-        .eq('id', gameRoom.id);
-
-      if (error) {
-        console.error('Failed to update timer:', error);
-      }
-    } catch (err) {
-      console.error('Failed to update timer:', err);
-    }
-  }, [gameRoom]);
-
   // Subscribe to game updates
   useEffect(() => {
     if (!roomId) {
@@ -535,6 +474,5 @@ export function useMultiplayerGame(roomId: string | null) {
     offerDraw,
     acceptDraw,
     declineDraw,
-    updateTimer,
   };
 }
