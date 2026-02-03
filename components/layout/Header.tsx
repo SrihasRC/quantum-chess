@@ -1,6 +1,6 @@
 'use client';
 
-import { Crown } from 'lucide-react';
+import { Crown, Menu } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useCallback } from 'react';
@@ -14,6 +14,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
 import { useNavigationGuardStore } from '@/lib/store/navigationGuardStore';
 
 export function Header() {
@@ -23,14 +31,19 @@ export function Header() {
   const onNavigationAttempt = useNavigationGuardStore((state) => state.onNavigationAttempt);
   const [showNavigationDialog, setShowNavigationDialog] = useState(false);
   const [pendingHref, setPendingHref] = useState<string>('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const handleLinkClick = useCallback((e: React.MouseEvent, href: string) => {
+  const handleLinkClick = useCallback((e: React.MouseEvent, href: string, closeMobileMenu = false) => {
     if (shouldBlockNavigation && pathname !== href) {
       e.preventDefault();
       e.stopPropagation();
       setPendingHref(href);
       setShowNavigationDialog(true);
+      if (closeMobileMenu) setMobileMenuOpen(false);
       return false;
+    }
+    if (closeMobileMenu) {
+      setMobileMenuOpen(false);
     }
   }, [shouldBlockNavigation, pathname]);
 
@@ -69,8 +82,8 @@ export function Header() {
             </div>
           </Link>
 
-          {/* Navigation Links */}
-          <nav className="flex items-center gap-4 sm:gap-6">
+          {/* Desktop Navigation Links */}
+          <nav className="hidden md:flex items-center gap-4 lg:gap-6">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
@@ -86,6 +99,37 @@ export function Header() {
               </Link>
             ))}
           </nav>
+
+          {/* Mobile Menu */}
+          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+            <SheetTrigger asChild className="md:hidden">
+              <Button variant="ghost" size="icon">
+                <Menu className="h-5 w-5" />
+                <span className="sr-only">Toggle menu</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right">
+              <SheetHeader>
+                <SheetTitle>Menu</SheetTitle>
+              </SheetHeader>
+              <nav className="flex flex-col gap-4 mt-8">
+                {navLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={(e) => handleLinkClick(e, link.href, true)}
+                    className={`text-base font-medium transition-colors hover:text-primary py-2 pl-4 ${
+                      pathname === link.href
+                        ? 'text-primary'
+                        : 'text-muted-foreground'
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </nav>
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
 
