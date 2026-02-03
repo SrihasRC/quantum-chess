@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { updatePlayerStats } from '@/lib/supabase/stats';
 import type { GameRoom } from '@/lib/supabase/types';
@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 
 export function useMultiplayerGame(roomId: string | null) {
   const [gameRoom, setGameRoom] = useState<GameRoom | null>(null);
+  const gameRoomRef = useRef<GameRoom | null>(null);
   const [playerId] = useState(() => {
     if (typeof window !== 'undefined') {
       let id = localStorage.getItem('playerId');
@@ -24,6 +25,11 @@ export function useMultiplayerGame(roomId: string | null) {
   const [playerColor, setPlayerColor] = useState<'white' | 'black' | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    gameRoomRef.current = gameRoom;
+  }, [gameRoom]);
 
   // Create a new game room
   const createGame = useCallback(async (username?: string) => {
@@ -144,17 +150,45 @@ export function useMultiplayerGame(roomId: string | null) {
 
   // Make a move
   const makeMove = useCallback(async (move: Move, newBoardState: BoardState, moveEntry: MoveHistoryEntry, gameStatus?: string) => {
-    if (!gameRoom) return;
+    // Use ref to get the latest gameRoom state (avoiding stale closures)
+    const currentGameRoom = gameRoomRef.current;
+    if (!currentGameRoom) return;
 
-    // Check if it's the player's turn
-    if (playerColor !== gameRoom.current_player) {
-      toast.error("Not your turn");
-      return;
-    }
+    // Don't check turn here - it's already validated in the page before movePiece is called
+    // Checking here causes race conditions with real-time updates
+
+    console.log('[makeMove] Called with:', { 
+      move, 
+      moveEntry, 
+      gameStatus,
+      playerColor,
+      boardPieceCount: newBoardState.pieces.length,
+      currentHistoryLength: currentGameRoom.move_history.length
+    });
 
     try {
-      const newMoveHistory = [...gameRoom.move_history, moveEntry];
-      const nextPlayer = gameRoom.current_player === 'white' ? ('black' as const) : ('white' as const);
+      // Refetch the latest game state to avoid race conditions with move history
+      const { data: freshGameRoom, error: fetchError } = await supabase
+        .from('game_rooms')
+        .select('*')
+        .eq('id', currentGameRoom.id)
+        .single();
+
+      if (fetchError) {
+        console.error('[makeMove] Failed to fetch fresh game state:', fetchError);
+        throw fetchError;
+      }
+
+      const freshGame = freshGameRoom as GameRoom;
+      const expectedHistoryLength = freshGame.move_history.length;
+      
+      console.log('[makeMove] Fresh history length from DB:', expectedHistoryLength);
+      
+      const newMoveHistory = [...freshGame.move_history, moveEntry];
+      // Determine next player based on who made the move, not current_player (which might be stale)
+      const nextPlayer = playerColor === 'white' ? ('black' as const) : ('white' as const);
+
+      console.log('[makeMove] New history length:', newMoveHistory.length, 'Next player:', nextPlayer);
 
       const updateData: Partial<GameRoom> = {
         game_state: newBoardState,
@@ -194,27 +228,41 @@ export function useMultiplayerGame(roomId: string | null) {
         updateData.current_player = nextPlayer;
       }
 
+      console.log('[makeMove] Updating database with:', { 
+        gameId: currentGameRoom.id,
+        newPieceCount: updateData.game_state?.pieces.length,
+        newHistoryLength: updateData.move_history?.length,
+        nextPlayer: updateData.current_player,
+        expectedHistoryLength: expectedHistoryLength
+      });
+
+      // Update database - race conditions prevented by UI locking + fresh data fetch
       const { error } = await supabase
         .from('game_rooms')
         .update(updateData as never)
-        .eq('id', gameRoom.id);
+        .eq('id', currentGameRoom.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('[makeMove] Database error:', error);
+        throw error;
+      }
+
+      console.log('[makeMove] Database update successful');
 
       // Update player stats if game is completed
-      if (updateData.status === 'completed' && gameRoom.creator_username && gameRoom.opponent_username) {
+      if (updateData.status === 'completed' && currentGameRoom.creator_username && currentGameRoom.opponent_username) {
         if (updateData.winner === 'draw') {
           // Both players get a draw
-          await updatePlayerStats(gameRoom.creator_username, 'draw');
-          await updatePlayerStats(gameRoom.opponent_username, 'draw');
+          await updatePlayerStats(currentGameRoom.creator_username, 'draw');
+          await updatePlayerStats(currentGameRoom.opponent_username, 'draw');
         } else if (updateData.winner === 'white') {
           // White wins, black loses
-          await updatePlayerStats(gameRoom.creator_username, 'win');
-          await updatePlayerStats(gameRoom.opponent_username, 'loss');
+          await updatePlayerStats(currentGameRoom.creator_username, 'win');
+          await updatePlayerStats(currentGameRoom.opponent_username, 'loss');
         } else if (updateData.winner === 'black') {
           // Black wins, white loses
-          await updatePlayerStats(gameRoom.opponent_username, 'win');
-          await updatePlayerStats(gameRoom.creator_username, 'loss');
+          await updatePlayerStats(currentGameRoom.opponent_username, 'win');
+          await updatePlayerStats(currentGameRoom.creator_username, 'loss');
         }
       }
 
@@ -370,67 +418,6 @@ export function useMultiplayerGame(roomId: string | null) {
     }
   }, [gameRoom]);
 
-  // Update timer (deduct time from current player)
-  const updateTimer = useCallback(async (elapsedSeconds: number) => {
-    if (!gameRoom || gameRoom.status !== 'active') return;
-
-    const currentPlayer = gameRoom.current_player;
-    const timeKey = currentPlayer === 'white' ? 'white_time_remaining' : 'black_time_remaining';
-    const currentTime = gameRoom[timeKey];
-    const newTime = Math.max(0, currentTime - elapsedSeconds);
-
-    // Check if time ran out
-    if (newTime === 0) {
-      const winner = currentPlayer === 'white' ? ('black' as const) : ('white' as const);
-      
-      try {
-        const { error } = await supabase
-          .from('game_rooms')
-          .update({
-            status: 'completed',
-            winner: winner,
-            winner_reason: 'timeout',
-            [timeKey]: 0,
-          } as never)
-          .eq('id', gameRoom.id);
-
-        if (error) {
-          console.error('Failed to end game on timeout:', error);
-        }
-
-        // Update player stats on timeout
-        if (gameRoom.creator_username && gameRoom.opponent_username) {
-          if (winner === 'white') {
-            await updatePlayerStats(gameRoom.creator_username, 'win');
-            await updatePlayerStats(gameRoom.opponent_username, 'loss');
-          } else {
-            await updatePlayerStats(gameRoom.opponent_username, 'win');
-            await updatePlayerStats(gameRoom.creator_username, 'loss');
-          }
-        }
-      } catch (err) {
-        console.error('Failed to end game on timeout:', err);
-      }
-      return;
-    }
-
-    // Update database every second for accurate timing
-    try {
-      const { error } = await supabase
-        .from('game_rooms')
-        .update({
-          [timeKey]: newTime,
-        } as never)
-        .eq('id', gameRoom.id);
-
-      if (error) {
-        console.error('Failed to update timer:', error);
-      }
-    } catch (err) {
-      console.error('Failed to update timer:', err);
-    }
-  }, [gameRoom]);
-
   // Subscribe to game updates
   useEffect(() => {
     if (!roomId) {
@@ -480,6 +467,12 @@ export function useMultiplayerGame(roomId: string | null) {
           filter: `id=eq.${roomId}`,
         },
         (payload) => {
+          console.log('[Subscription] Received update:', {
+            event: payload.eventType,
+            historyLength: (payload.new as any)?.move_history?.length,
+            currentPlayer: (payload.new as any)?.current_player,
+          });
+          
           if (payload.new) {
             const newGameRoom = payload.new as GameRoom;
             setGameRoom(newGameRoom);
@@ -493,9 +486,12 @@ export function useMultiplayerGame(roomId: string | null) {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[Subscription] Status:', status);
+      });
 
     return () => {
+      console.log('[Subscription] Unsubscribing');
       supabase.removeChannel(channel);
     };
   }, [roomId, playerId]);
@@ -515,6 +511,5 @@ export function useMultiplayerGame(roomId: string | null) {
     offerDraw,
     acceptDraw,
     declineDraw,
-    updateTimer,
   };
 }

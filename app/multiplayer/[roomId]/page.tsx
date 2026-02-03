@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { GameContainer } from '@/components/layout/GameContainer';
 import { Chessboard } from '@/components/board/Chessboard';
 import { MoveModSelector, type MoveMode } from '@/components/game/MoveModSelector';
-import { Timer } from '@/components/game/Timer';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Users, Clock, Flag, Handshake } from 'lucide-react';
 import { useMultiplayerGame } from '@/hooks/useMultiplayerGame';
@@ -40,7 +39,6 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
     offerDraw,
     acceptDraw,
     declineDraw,
-    updateTimer,
   } = useMultiplayerGame(roomId);
   const resetSelection = useGameStore((state) => state.resetSelection);
   const moveHistory = useGameStore((state) => state.moveHistory);
@@ -52,7 +50,9 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
   const [showGameOverDialog, setShowGameOverDialog] = useState(false);
   const [lastMoveCount, setLastMoveCount] = useState(0);
   const [hasSetReady, setHasSetReady] = useState(false);
+  const [waitingForTurnSwitch, setWaitingForTurnSwitch] = useState(false);
   const gameRoomRef = useRef(gameRoom);
+  const lastTurnRef = useRef<'white' | 'black' | null>(null);
   const setShouldBlockNavigation = useNavigationGuardStore((state) => state.setShouldBlockNavigation);
   const setOnNavigationAttempt = useNavigationGuardStore((state) => state.setOnNavigationAttempt);
   
@@ -60,6 +60,21 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
   useEffect(() => {
     gameRoomRef.current = gameRoom;
   }, [gameRoom]);
+
+  // Monitor turn changes and unlock moves when turn switches
+  useEffect(() => {
+    if (!gameRoom) return;
+    
+    console.log('[Turn Monitor] Current player:', gameRoom.current_player, 'Last turn:', lastTurnRef.current, 'Waiting:', waitingForTurnSwitch);
+    
+    // If we were waiting for a turn switch and it happened, unlock moves
+    if (waitingForTurnSwitch && lastTurnRef.current !== null && gameRoom.current_player !== lastTurnRef.current) {
+      console.log('[Turn Monitor] Turn switched! Unlocking moves');
+      setWaitingForTurnSwitch(false);
+    }
+    
+    lastTurnRef.current = gameRoom.current_player;
+  }, [gameRoom?.current_player, waitingForTurnSwitch]);
 
   // Set player as ready when they enter the room (only once)
   useEffect(() => {
@@ -114,7 +129,20 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
   // Sync game state from multiplayer to local store
   useEffect(() => {
     if (gameRoom && gameRoom.game_state) {
-      const updateData: any = {
+      console.log('[Board Sync] Syncing from server:', {
+        serverHistoryLength: gameRoom.move_history?.length,
+        serverPieceCount: gameRoom.game_state.pieces?.length,
+        localHistoryLength: useGameStore.getState().moveHistory.length,
+        localPieceCount: useGameStore.getState().board.pieces?.length
+      });
+      
+      const updateData: {
+        board: typeof gameRoom.game_state;
+        moveHistory: typeof gameRoom.move_history;
+        currentMoveIndex: number;
+        boardStateHistory: never[];
+        status?: 'active' | 'white-wins' | 'black-wins' | 'draw';
+      } = {
         board: gameRoom.game_state,
         moveHistory: gameRoom.move_history || [],
         currentMoveIndex: (gameRoom.move_history?.length || 0) - 1,
@@ -133,7 +161,7 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
         
         // Show dialog on first transition to completed
         const currentStatus = useGameStore.getState().status;
-        if (currentStatus === 'active' || currentStatus === 'check') {
+        if (currentStatus === 'active') {
           setShowGameOverDialog(true);
         }
       } else {
@@ -141,6 +169,7 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
       }
       
       useGameStore.setState(updateData);
+      console.log('[Board Sync] Synced to local store');
     }
   }, [gameRoom]);
 
@@ -176,6 +205,9 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
       },
       
       movePiece: (move: Move) => {
+        console.log('[Move Attempt] Move:', move, 'Player:', playerColor, 'Current turn:', gameRoom.current_player, 'Locked:', waitingForTurnSwitch);
+        console.log('[Move Attempt] Local history:', useGameStore.getState().moveHistory.length, 'Server history:', gameRoom.move_history.length);
+        
         // Don't allow moves if game is over
         if (gameRoom.status === 'completed') {
           toast.error("Game is over!");
@@ -188,8 +220,23 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
           return;
         }
         
+        // Block moves if we're waiting for turn to switch from previous move
+        if (waitingForTurnSwitch) {
+          console.log('[Move Blocked] Waiting for turn switch');
+          toast.error("Please wait for opponent's turn...");
+          return;
+        }
+        
+        // Make sure our local state is synced with server before allowing move
+        if (useGameStore.getState().moveHistory.length !== gameRoom.move_history.length) {
+          console.log('[Move Blocked] Waiting for sync - local and server history mismatch');
+          toast.error("Syncing game state...");
+          return;
+        }
+        
         // Double-check turn before making move
         if (gameRoom.current_player !== playerColor) {
+          console.log('[Move Rejected] Not your turn');
           toast.error("Not your turn!");
           return;
         }
@@ -197,19 +244,38 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
         // Execute move locally first
         originalMovePiece(move);
 
+        // Lock moves until subscription confirms turn switch
+        console.log('[Move Executed] Locking moves until turn switches');
+        setWaitingForTurnSwitch(true);
+
         // Small delay to ensure state is fully updated
-        setTimeout(() => {
-          // Get updated state after move
-          const newBoard = useGameStore.getState().board;
-          const newMoveHistory = useGameStore.getState().moveHistory;
-          const lastMoveEntry = newMoveHistory[newMoveHistory.length - 1];
-          const gameStatus = useGameStore.getState().status;
+        setTimeout(async () => {
+          try {
+            // Get updated state after move
+            const newBoard = useGameStore.getState().board;
+            const newMoveHistory = useGameStore.getState().moveHistory;
+            const lastMoveEntry = newMoveHistory[newMoveHistory.length - 1];
+            const gameStatus = useGameStore.getState().status;
 
-          // Check if game ended (white-wins, black-wins, draw)
-          const isGameOver = gameStatus === 'white-wins' || gameStatus === 'black-wins' || gameStatus === 'draw';
+            console.log('[Move Sync] About to send:', {
+              boardPieceCount: newBoard.pieces?.length,
+              historyLength: newMoveHistory.length,
+              lastMove: lastMoveEntry
+            });
 
-          // Sync to server with game status
-          makeMove(move, newBoard, lastMoveEntry, isGameOver ? gameStatus : undefined);
+            // Check if game ended (white-wins, black-wins, draw)
+            const isGameOver = gameStatus === 'white-wins' || gameStatus === 'black-wins' || gameStatus === 'draw';
+
+            console.log('[Move Sync] Syncing to server...');
+            // Sync to server with game status
+            await makeMove(move, newBoard, lastMoveEntry, isGameOver ? gameStatus : undefined);
+            console.log('[Move Sync] Successfully synced to server');
+          } catch (error) {
+            console.error('[Move Sync] Failed to sync move:', error);
+            toast.error('Move failed to sync. Please try again.');
+            // Unlock moves on error
+            setWaitingForTurnSwitch(false);
+          }
         }, 100);
       },
     });
@@ -221,7 +287,7 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
         movePiece: originalMovePiece 
       });
     };
-  }, [gameRoom, playerColor, makeMove]);
+  }, [gameRoom, playerColor, makeMove, waitingForTurnSwitch]);
 
   const handleLeave = () => {
     setShowLeaveDialog(true);
@@ -284,12 +350,7 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
     }
   }, [gameRoom?.draw_offered_by, gameRoom?.status, playerColor]);
 
-  // Handle timer updates
-  const handleTimerUpdate = (elapsedSeconds: number) => {
-    if (gameRoom?.current_player === playerColor && !isGameOver && gameRoom.status === 'active') {
-      updateTimer(elapsedSeconds);
-    }
-  };
+
 
   // Cleanup on unmount - end game if still active
   useEffect(() => {
@@ -299,6 +360,7 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
         endGame();
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps - only cleanup on unmount
 
   // Prevent navigation away from page during active game
@@ -457,24 +519,6 @@ export default function MultiplayerGameRoom({ params }: { params: Promise<{ room
         <div className="flex w-full flex-col items-center gap-3 sm:gap-4 md:flex-row md:gap-6 lg:gap-8">
           <div className="flex flex-col gap-2 shrink-0 md:w-auto">
             <MoveModSelector mode={moveMode} onModeChange={setMoveMode} />
-            
-            {/* Timers */}
-            {!isGameOver && (
-              <div className="flex flex-col gap-2">
-                <Timer
-                  timeRemaining={gameRoom.black_time_remaining}
-                  isActive={gameRoom.current_player === 'black'}
-                  color="black"
-                  onTimeUpdate={handleTimerUpdate}
-                />
-                <Timer
-                  timeRemaining={gameRoom.white_time_remaining}
-                  isActive={gameRoom.current_player === 'white'}
-                  color="white"
-                  onTimeUpdate={handleTimerUpdate}
-                />
-              </div>
-            )}
             
             {/* Player Info */}
             <div className="rounded-md border p-2 text-sm w-full min-w-37.5">

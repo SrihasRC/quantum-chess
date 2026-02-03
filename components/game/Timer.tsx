@@ -1,68 +1,47 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Clock } from 'lucide-react';
 
 interface TimerProps {
-  timeRemaining: number; // in seconds
-  isActive: boolean;
+  initialTime: number; // Base time in seconds (from DB)
+  turnStartTime: number; // Timestamp when turn started (last_move_time)
+  isActive: boolean; // Is it this player's turn?
   color: 'white' | 'black';
-  onTimeUpdate?: (elapsedSeconds: number) => void;
+  onTimeout?: () => void; // Called when time runs out
 }
 
-export function Timer({ timeRemaining, isActive, color, onTimeUpdate }: TimerProps) {
-  const [displayTime, setDisplayTime] = useState(timeRemaining);
-  const lastTimeRemainingRef = useRef(timeRemaining);
-  const accumulatedSecondsRef = useRef(0);
-  const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
-
-  // Reset when timeRemaining changes from parent (e.g., after a move or turn change)
-  useEffect(() => {
-    if (timeRemaining !== lastTimeRemainingRef.current) {
-      setDisplayTime(timeRemaining);
-      lastTimeRemainingRef.current = timeRemaining;
-      accumulatedSecondsRef.current = 0;
-    }
-  }, [timeRemaining]);
+export function Timer({ initialTime, turnStartTime, isActive, color, onTimeout }: TimerProps) {
+  const [displayTime, setDisplayTime] = useState(initialTime);
 
   useEffect(() => {
-    // Clear any existing interval
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-    }
-
     if (!isActive) {
-      accumulatedSecondsRef.current = 0;
+      setDisplayTime(initialTime);
       return;
     }
 
-    let lastTick = Date.now();
-
-    intervalRef.current = setInterval(() => {
+    // Calculate time left based on elapsed time since turn started
+    const updateTime = () => {
       const now = Date.now();
-      const elapsedMs = now - lastTick;
+      const elapsed = Math.floor((now - turnStartTime) / 1000);
+      const remaining = Math.max(0, initialTime - elapsed);
       
-      if (elapsedMs >= 1000) {
-        const elapsedSeconds = Math.floor(elapsedMs / 1000);
-        setDisplayTime(prev => {
-          const newTime = Math.max(0, prev - elapsedSeconds);
-          return newTime;
-        });
-        lastTick = now;
-        
-        // Notify parent every second
-        if (onTimeUpdate && elapsedSeconds > 0) {
-          onTimeUpdate(elapsedSeconds);
-        }
-      }
-    }, 100); // Check every 100ms for smoother updates
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+      setDisplayTime(remaining);
+      
+      // Check for timeout
+      if (remaining === 0 && onTimeout) {
+        onTimeout();
       }
     };
-  }, [isActive, onTimeUpdate, displayTime]);
+
+    // Update immediately
+    updateTime();
+
+    // Then update every 100ms for smooth display
+    const interval = setInterval(updateTime, 100);
+
+    return () => clearInterval(interval);
+  }, [isActive, initialTime, turnStartTime, onTimeout]);
 
   const minutes = Math.floor(displayTime / 60);
   const seconds = displayTime % 60;
