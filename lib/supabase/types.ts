@@ -29,6 +29,8 @@ export interface Database {
           black_time_remaining: number
           last_move_time: number | null
           draw_offered_by: 'white' | 'black' | null
+          creator_username: string | null
+          opponent_username: string | null
         }
         Insert: {
           id?: string
@@ -47,6 +49,8 @@ export interface Database {
           black_time_remaining?: number
           last_move_time?: number | null
           draw_offered_by?: 'white' | 'black' | null
+          creator_username?: string | null
+          opponent_username?: string | null
         }
         Update: {
           id?: string
@@ -65,6 +69,40 @@ export interface Database {
           black_time_remaining?: number
           last_move_time?: number | null
           draw_offered_by?: 'white' | 'black' | null
+          creator_username?: string | null
+          opponent_username?: string | null
+        }
+      }
+      player_stats: {
+        Row: {
+          username: string
+          wins: number
+          losses: number
+          draws: number
+          points: number
+          games_played: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          username: string
+          wins?: number
+          losses?: number
+          draws?: number
+          points?: number
+          games_played?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          username?: string
+          wins?: number
+          losses?: number
+          draws?: number
+          points?: number
+          games_played?: number
+          created_at?: string
+          updated_at?: string
         }
       }
     }
@@ -88,4 +126,17 @@ export interface GameRoom {
   black_time_remaining: number;
   last_move_time: number | null;
   draw_offered_by: 'white' | 'black' | null;
+  creator_username: string | null;
+  opponent_username: string | null;
+}
+
+export interface PlayerStats {
+  username: string;
+  wins: number;
+  losses: number;
+  draws: number;
+  points: number;
+  games_played: number;
+  created_at: string;
+  updated_at: string;
 }

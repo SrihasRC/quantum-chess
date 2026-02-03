@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase/client';
+import { updatePlayerStats } from '@/lib/supabase/stats';
 import type { GameRoom } from '@/lib/supabase/types';
 import type { Move, BoardState, MoveHistoryEntry } from '@/lib/types';
 import { createInitialBoardState } from '@/lib/engine/state';
@@ -25,13 +26,14 @@ export function useMultiplayerGame(roomId: string | null) {
   const [error, setError] = useState<string | null>(null);
 
   // Create a new game room
-  const createGame = useCallback(async () => {
+  const createGame = useCallback(async (username?: string) => {
     try {
       const initialBoard = createInitialBoardState();
-      const { data, error } = (await supabase
+      const { data, error} = (await supabase
         .from('game_rooms')
         .insert({
           creator_id: playerId,
+          creator_username: username || null,
           status: 'waiting',
           current_player: 'white',
           game_state: initialBoard,
@@ -58,7 +60,7 @@ export function useMultiplayerGame(roomId: string | null) {
   }, [playerId]);
 
   // Join an existing game
-  const joinGame = useCallback(async (gameId: string) => {
+  const joinGame = useCallback(async (gameId: string, username?: string) => {
     try {
       // First, fetch the game to check if it's available
       const { data: game, error: fetchError } = (await supabase
@@ -78,6 +80,7 @@ export function useMultiplayerGame(roomId: string | null) {
         .from('game_rooms')
         .update({
           opponent_id: playerId,
+          opponent_username: username || null,
         } as never)
         .eq('id', gameId);
 
@@ -198,6 +201,23 @@ export function useMultiplayerGame(roomId: string | null) {
 
       if (error) throw error;
 
+      // Update player stats if game is completed
+      if (updateData.status === 'completed' && gameRoom.creator_username && gameRoom.opponent_username) {
+        if (updateData.winner === 'draw') {
+          // Both players get a draw
+          await updatePlayerStats(gameRoom.creator_username, 'draw');
+          await updatePlayerStats(gameRoom.opponent_username, 'draw');
+        } else if (updateData.winner === 'white') {
+          // White wins, black loses
+          await updatePlayerStats(gameRoom.creator_username, 'win');
+          await updatePlayerStats(gameRoom.opponent_username, 'loss');
+        } else if (updateData.winner === 'black') {
+          // Black wins, white loses
+          await updatePlayerStats(gameRoom.opponent_username, 'win');
+          await updatePlayerStats(gameRoom.creator_username, 'loss');
+        }
+      }
+
       // Don't show toast here - let the game room page handle the dialog
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
@@ -225,6 +245,17 @@ export function useMultiplayerGame(roomId: string | null) {
         .eq('id', gameRoom.id);
 
       if (error) throw error;
+
+      // Update player stats
+      if (gameRoom.creator_username && gameRoom.opponent_username) {
+        if (playerColor === 'white') {
+          await updatePlayerStats(gameRoom.creator_username, 'loss');
+          await updatePlayerStats(gameRoom.opponent_username, 'win');
+        } else {
+          await updatePlayerStats(gameRoom.opponent_username, 'loss');
+          await updatePlayerStats(gameRoom.creator_username, 'win');
+        }
+      }
 
       toast.info('You resigned', {
         description: 'Opponent wins',
@@ -365,6 +396,17 @@ export function useMultiplayerGame(roomId: string | null) {
 
         if (error) {
           console.error('Failed to end game on timeout:', error);
+        }
+
+        // Update player stats on timeout
+        if (gameRoom.creator_username && gameRoom.opponent_username) {
+          if (winner === 'white') {
+            await updatePlayerStats(gameRoom.creator_username, 'win');
+            await updatePlayerStats(gameRoom.opponent_username, 'loss');
+          } else {
+            await updatePlayerStats(gameRoom.opponent_username, 'win');
+            await updatePlayerStats(gameRoom.creator_username, 'loss');
+          }
         }
       } catch (err) {
         console.error('Failed to end game on timeout:', err);

@@ -14,7 +14,7 @@ export function Timer({ timeRemaining, isActive, color, onTimeUpdate }: TimerPro
   const [displayTime, setDisplayTime] = useState(timeRemaining);
   const lastTimeRemainingRef = useRef(timeRemaining);
   const accumulatedSecondsRef = useRef(0);
-  const intervalRef = useRef<NodeJS.Timeout>();
+  const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   // Reset when timeRemaining changes from parent (e.g., after a move or turn change)
   useEffect(() => {
